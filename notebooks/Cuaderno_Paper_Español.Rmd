@@ -122,28 +122,28 @@ library(conflicted)
 
 ```{r message=FALSE, warning=FALSE}
 #Importamos base de datos
-petro_1 <- read_excel("Datos/#petro (25_03) (1).xlsx")
-petro_2 <- read_excel("Datos/#Petro_1 (25_03_23).xlsx")
+petro_1 <- read_excel("data/#petro (25_03) (1).xlsx")
+petro_2 <- read_excel("data/#Petro_1 (25_03_23).xlsx")
 
 
-laboral_1 <- read_excel("Datos/ReformaLaboral(25_03).xlsx")
-laboral_2 <- read_excel("Datos/ReformasLaboral_1(01_04.xlsx")
+laboral_1 <- read_excel("data/ReformaLaboral(25_03).xlsx")
+laboral_2 <- read_excel("data/ReformasLaboral_1(01_04.xlsx")
 
-pensional_1 <- read_excel("Datos/ReformaPensional(25_03).xlsx")
-pensional_2 <- read_excel("Datos/ReformasPensional_1(01_04.xlsx")
+pensional_1 <- read_excel("data/ReformaPensional(25_03).xlsx")
+pensional_2 <- read_excel("data/ReformasPensional_1(01_04.xlsx")
 
-salud_1 <- read_excel("Datos/ReformaSalud(25_03).xlsx")
-salud_2 <- read_excel("Datos/ReformasSalud_1(01_04.xlsx")
+salud_1 <- read_excel("data/ReformaSalud(25_03).xlsx")
+salud_2 <- read_excel("data/ReformasSalud_1(01_04.xlsx")
 
-petros_comments <- read_csv("Datos/FinalData2.csv")
+petros_comments <- read_csv("data/FinalData2.csv")
 ```
 
 **Segundo**, importamos datos finacieros
 
 ```{r}
-ColeqtyIndex <- read_excel("Datos/ColeqtyIndex.xlsx")
+ColeqtyIndex <- read_excel("data/ColeqtyIndex.xlsx")
 #ts_sentiment <- read_excel("Datos/ts_sentiment.xlsx") # Daos del paper version 1
-trmindex <- read_excel("Datos/TRMIndex.xlsx")
+trmindex <- read_excel("data/TRMIndex.xlsx")
 
 ```
 
