@@ -1,0 +1,2134 @@
+---
+title: "Cuaderno Replicación Tecnica Paper"
+author: "Juan José Echeverry"
+output: 
+  html_notebook:
+    toc: true          # Activa tabla de contenido
+    toc_depth: 3       # Profundidad de la TOC (por defecto es 3)
+    toc_float: true    # Tabla de contenido flotante
+    #number_sections: true  # Numera secciones
+    fig_width: 10       # Ancho predeterminado de figuras (en pulgadas)
+    fig_height: 10     # Alto predeterminado de figuras (en pulgadas)
+    #theme: darkly          # opcional, tema Bootstrap oscuro
+    highlight: tango    # Tema de resaltado de código
+    #css: chunk-dark.css    # hoja de estilos personalizada
+---
+
+# Introducción
+
+La presente documentación busca dejar documentado cada uno de los pasos del paper de analis del impacto del discurso politico en en tema financiero
+
+# 1) Configuraciones iniciales
+
+## 1.1) Librerias necesarias
+
+```{r message=FALSE, warning=FALSE}
+# ======================================================
+# Núcleo tidyverse y manipulación de datos
+# ======================================================
+library(tidyverse)   # Ecosistema para ciencia de datos (dplyr, ggplot2, tidyr, readr, stringr, etc.)
+library(dplyr)       # Manipulación de datos
+library(tidyr)       # Reestructuración de datos
+library(stringr)     # Manipulación de texto
+library(magrittr)    # Operador pipe (%>%) y utilidades
+library(janitor)     # Limpieza de nombres y tablas
+library(rlist)       # Manipulación avanzada de listas
+
+# ======================================================
+# Lectura, escritura y gestión de archivos
+# ======================================================
+library(readxl)      # Lectura de archivos Excel
+library(openxlsx)    # Escritura y edición de archivos Excel
+library(here)        # Rutas reproducibles dentro del proyecto
+library(readtext)    # Lectura de textos con metadatos
+library(rvest)       # Web scraping
+
+# ======================================================
+# Análisis de texto y NLP
+# ======================================================
+library(NLP)                   # Infraestructura base para NLP
+library(tm)                    # Minería de texto clásica
+library(tidytext)              # Análisis de texto en formato tidy
+library(quanteda)              # Corpus, tokens y dfm
+library(quanteda.textstats)    # Estadísticas textuales
+library(quanteda.textplots)    # Visualizaciones para objetos quanteda
+library(quanteda.textmodels)   # Modelos textuales (ej. Wordfish)
+
+# ======================================================
+# Limpieza y preprocesamiento de texto
+# ======================================================
+library(qdapRegex)  # Limpieza de texto con expresiones regulares (ej. caracteres no ASCII)
+library(syuzhet)    # Análisis de sentimiento basado en léxicos
+
+# ======================================================
+# Visualización de datos
+# ======================================================
+library(ggplot2)        # Visualización basada en gramática de gráficos
+library(ggthemes)       # Temas adicionales para ggplot2
+library(ggrepel)        # Etiquetas sin superposición
+library(gridExtra)      # Organización de múltiples gráficos
+library(RColorBrewer)  # Paletas de colores
+library(wordcloud)     # Nubes de palabras
+
+# ======================================================
+# Estadística descriptiva y exploración
+# ======================================================
+library(pastecs)  # Estadística descriptiva
+library(skimr)    # Resúmenes rápidos y legibles de datos
+
+# ======================================================
+# Reportes y tablas (R Markdown / paper)
+# ======================================================
+library(knitr)       # Integración R + Markdown
+library(kableExtra)  # Tablas estilizadas para HTML / LaTeX
+
+
+## Librerías para manipulación y lectura de datos
+library(tidyverse)   # Incluye dplyr, ggplot2, tidyr, readr, etc.
+library(dbplyr)
+library(haven)
+library(readxl)
+library(openxlsx)
+library(writexl)
+
+## Econometría y estadística
+library(MASS)
+library(AER)
+library(psych)
+library(lmtest)
+library(olsrr)
+
+## Series de tiempo
+library(tseries)
+library(TSA)
+library(aTSA)
+library(TSstudio)
+library(vars)
+library(mFilter)
+library(caret)
+
+## Utilidades y presentación de resultados
+library(kableExtra)
+library(remotes)
+library(ggthemes)
+library(conflicted)
+
+
+```
+
+## 1.2) Datos necesarios
+
+**Primero**, datos de tweets
+
+```{r message=FALSE, warning=FALSE}
+#Importamos base de datos
+petro_1 <- read_excel("Datos/#petro (25_03) (1).xlsx")
+petro_2 <- read_excel("Datos/#Petro_1 (25_03_23).xlsx")
+
+
+laboral_1 <- read_excel("Datos/ReformaLaboral(25_03).xlsx")
+laboral_2 <- read_excel("Datos/ReformasLaboral_1(01_04.xlsx")
+
+pensional_1 <- read_excel("Datos/ReformaPensional(25_03).xlsx")
+pensional_2 <- read_excel("Datos/ReformasPensional_1(01_04.xlsx")
+
+salud_1 <- read_excel("Datos/ReformaSalud(25_03).xlsx")
+salud_2 <- read_excel("Datos/ReformasSalud_1(01_04.xlsx")
+
+petros_comments <- read_csv("Datos/FinalData2.csv")
+```
+
+**Segundo**, importamos datos finacieros
+
+```{r}
+ColeqtyIndex <- read_excel("Datos/ColeqtyIndex.xlsx")
+#ts_sentiment <- read_excel("Datos/ts_sentiment.xlsx") # Daos del paper version 1
+trmindex <- read_excel("Datos/TRMIndex.xlsx")
+
+```
+
+# 2) Preprocesamiento de los datos
+
+## 2.1) Tomar columnas de interes
+
+**Primero** tabla de scraping "#Petro"
+
+```{r}
+#reducimos a varibles de interes de #Petro
+petro_1_1 <-petro_1 %>%  
+  dplyr::select(created_at,id,full_text) %>% 
+  rename(Fecha=created_at, Usuario= id, Texto= full_text) |> 
+  mutate(
+    Nombre = "NA",
+    Ubicacion = "NA" 
+         )
+
+petro_2_1 <-petro_2 %>%  
+  dplyr::select(created_at...2,id...3,full_text,name,location) %>% 
+  rename(Fecha=created_at...2, Usuario= id...3, Texto= full_text, Nombre =name, Ubicacion = location)
+
+```
+
+**Segundo** tabla de scraping "#ReformaLaboral"
+
+```{r}
+#reducimos a varibles de interes de reforma laboral
+laboral_1_1 <-laboral_1 %>%  
+  dplyr::select(created_at,id,full_text) %>% 
+  rename(Fecha=created_at, Usuario= id, Texto= full_text) |> 
+    mutate(
+    Nombre = "NA",
+    Ubicacion = "NA" 
+         )
+
+laboral_2_1 <-laboral_2 %>%  
+  dplyr::select(created_at...2,id...3,full_text,name,location) %>% 
+  rename(Fecha=created_at...2, Usuario= id...3, Texto= full_text, Nombre =name, Ubicacion = location)
+
+```
+
+**Tercero** tabla de scraping "#ReformaPensional"
+
+```{r}
+pensional_1_1 <-pensional_1 %>%  
+  dplyr::select(created_at,id,full_text) %>% 
+  rename(Fecha=created_at, Usuario= id, Texto= full_text) |> 
+    mutate(
+    Nombre = "NA",
+    Ubicacion = "NA" 
+         )
+
+pensional_2_1 <-pensional_2 %>%  
+  dplyr::select(created_at...2,id...3,full_text,name,location) %>% 
+  rename(Fecha=created_at...2, Usuario= id...3, Texto= full_text, Nombre =name, Ubicacion = location)
+
+
+```
+
+**Cuarto** tabla de scraping "#ReformaSalud"
+
+```{r}
+#reducimos a varibles de interes de reforma a la salud
+salud_1_1 <-salud_1 %>%  
+  dplyr::select(created_at,id,full_text) %>% 
+  rename(Fecha=created_at, Usuario= id, Texto= full_text) |> 
+    mutate(
+    Nombre = "NA",
+    Ubicacion = "NA" 
+         )
+
+salud_2_1 <-salud_2 %>%  
+  dplyr::select(created_at...2,id...3,full_text,name,location) %>% 
+  rename(Fecha=created_at...2, Usuario= id...3, Texto= full_text, Nombre =name, Ubicacion = location)
+
+
+
+```
+
+**Quinto** tabla de scraping de Tweets de Petro
+
+```{r}
+#reducimos a varibles de interes comentarios de petro
+petro_comments <-petros_comments %>%  
+  dplyr::select(created_at,full_text,retweet_count,favorite_count) %>% 
+  rename(Fecha=created_at, Texto= full_text, Retweets= retweet_count, Likes= favorite_count)
+
+
+
+```
+
+## 2.2) Consolidamos tablas
+
+**Primero**, consolidamos unido por medio de filas
+
+```{r}
+#Juntar tablas poniendo filas por debajo o por encima 
+#unimos la pagina 1 con las demas, las variables se deben llamar igual 
+Petro_Opinion <- rbind(petro_1_1,petro_2_1)
+Laboral_Opinion <- rbind(laboral_1_1,laboral_2_1)
+Pensional_Opinion <- rbind(pensional_1_1,pensional_2_1)
+Salud_Opinion <- rbind(salud_1_1,salud_2_1)
+```
+
+## 2.3) Limpiamos texto
+
+**Primero**, creamos funcion para limpieza de acentacuación
+
+```{r}
+# especificamos funciones para quitar acentos 
+f_remove_accent <- function(x){
+  x %>%
+    str_replace_all("á", "a") %>%
+    str_replace_all("é", "e") %>%
+    str_replace_all("í", "i") %>%
+    str_replace_all("ó", "o") %>%
+    str_replace_all("ú", "u") %>%
+    str_replace_all("ñ", "n") 
+}
+```
+
+**Segundo**, Limpiamos los datos sobre la opinion de petro
+
+```{r}
+#Pre-procesamos la base de datos quintando acentuacion y emojis
+Numeral_Petro_sin_emojis <- Petro_Opinion %>%
+  mutate(Texto = Texto %>%
+           # delete user names (which start with @):
+           str_remove("\\@[[:alnum:]]+") %>%
+           # delete URLs:
+           str_remove_all("http[\\w[:punct:]]+") %>%
+           # all text to lowercase:
+           str_to_lower() %>%
+           # remove special characters:
+           str_remove_all("[\\d\\.,_\\@]+") %>%
+           f_remove_accent() %>%
+           # remove emojis
+           rm_non_ascii()
+  )
+```
+
+**Tercero**, limpiamos los datos sobre la reforma laboral
+
+```{r}
+Reforma_laboral_sin_emojis <- Laboral_Opinion %>%
+  mutate(Texto = Texto %>%
+           # delete user names (which start with @):
+           str_remove("\\@[[:alnum:]]+") %>%
+           # delete URLs:
+           str_remove_all("http[\\w[:punct:]]+") %>%
+           # all text to lowercase:
+           str_to_lower() %>%
+           # remove special characters:
+           str_remove_all("[\\d\\.,_\\@]+") %>%
+           f_remove_accent() %>%
+           # remove emojis
+           rm_non_ascii()
+  )
+
+```
+
+**Cuarto**, limpiamos los datos sobre la reforma pesional
+
+```{r}
+Reforma_pensional_sin_emojis <- Pensional_Opinion %>%
+  mutate(Texto = Texto %>%
+           # delete user names (which start with @):
+           str_remove("\\@[[:alnum:]]+") %>%
+           # delete URLs:
+           str_remove_all("http[\\w[:punct:]]+") %>%
+           # all text to lowercase:
+           str_to_lower() %>%
+           # remove special characters:
+           str_remove_all("[\\d\\.,_\\@]+") %>%
+           f_remove_accent() %>%
+           # remove emojis
+           rm_non_ascii()
+  )
+
+```
+
+**Quinto**, limpiamos los datos sobre la reforma a la salud
+
+```{r}
+Reforma_salud_sin_emojis <- Salud_Opinion %>%
+  mutate(Texto = Texto %>%
+           # delete user names (which start with @):
+           str_remove("\\@[[:alnum:]]+") %>%
+           # delete URLs:
+           str_remove_all("http[\\w[:punct:]]+") %>%
+           # all text to lowercase:
+           str_to_lower() %>%
+           # remove special characters:
+           str_remove_all("[\\d\\.,_\\@]+") %>%
+           f_remove_accent() %>%
+           # remove emojis
+           rm_non_ascii()
+  )
+
+```
+
+**Sexto**, limpiamos los datos sobre tweets realizado por petro
+
+```{r}
+petro_comments_sin_emojis <- petro_comments %>%
+  mutate(Texto = Texto %>%
+           # delete user names (which start with @):
+           #str_remove("\\@[[:alnum:]]+") %>%
+           # delete URLs:
+           str_remove_all("http[\\w[:punct:]]+") %>%
+           # all text to lowercase:
+           #str_to_lower() %>%
+           # remove special characters:
+           str_remove_all("[\\d\\.,_]+") %>%
+           f_remove_accent() %>%
+           # remove emojis
+           rm_non_ascii()
+  )
+```
+
+## 2.4) Filtramos comentarios por dias
+
+**Primero**, unifiamos tweets de las reformas
+
+```{r}
+# Agregaos columnaque indica tipo de reforma
+
+Reforma_laboral_sin_emojis$Reforma <- "Laboral"
+Reforma_pensional_sin_emojis$Reforma <- "Pensional"
+Reforma_salud_sin_emojis$Reforma <- "Salud"
+
+# Unimos en una misma tabla los temas de la reforma 
+tabla <- rbind(Reforma_laboral_sin_emojis,Reforma_pensional_sin_emojis)
+Reformas <- rbind(tabla,Reforma_salud_sin_emojis)
+
+#separamos horas de las fechas
+Reformas <- separate(Reformas, Fecha, c("fecha","horas"), " ")
+
+head(Reformas)
+```
+
+**Segund**, indicamos dia por dia
+
+```{r}
+#filtramos dia por dia 
+tweets_16_03 <- Reformas %>%
+  dplyr::filter(fecha == "2023-03-16") %>% 
+  dplyr::select(fecha,Usuario,Texto, Reforma)
+
+tweets_17_03 <- Reformas %>%
+  dplyr::filter(fecha == "2023-03-17") %>% 
+  dplyr::select(fecha,Usuario,Texto, Reforma)
+
+tweets_18_03 <- Reformas %>%
+  dplyr::filter(fecha == "2023-03-18") %>% 
+  dplyr::select(fecha,Usuario,Texto, Reforma)
+
+tweets_19_03 <- Reformas %>%
+  dplyr::filter(fecha == "2023-03-19") %>% 
+  dplyr::select(fecha,Usuario,Texto, Reforma)
+
+tweets_20_03 <- Reformas %>%
+  dplyr::filter(fecha == "2023-03-20") %>% 
+  dplyr::select(fecha,Usuario,Texto, Reforma)
+
+tweets_21_03 <- Reformas %>%
+  dplyr::filter(fecha == "2023-03-21") %>% 
+  dplyr::select(fecha,Usuario,Texto, Reforma)
+
+tweets_22_03 <- Reformas %>%
+  dplyr::filter(fecha == "2023-03-22") %>% 
+  dplyr::select(fecha,Usuario,Texto, Reforma)
+
+tweets_23_03 <- Reformas %>%
+  dplyr::filter(fecha == "2023-03-23") %>% 
+  dplyr::select(fecha,Usuario,Texto, Reforma)
+
+tweets_24_03 <- Reformas %>%
+  dplyr::filter(fecha == "2023-03-24") %>% 
+  dplyr::select(fecha,Usuario,Texto, Reforma)
+
+tweets_25_03 <- Reformas %>%
+  dplyr::filter(fecha == "2023-03-25") %>% 
+  dplyr::select(fecha,Usuario,Texto, Reforma)
+
+tweets_26_03 <- Reformas %>%
+  dplyr::filter(fecha == "2023-03-26") %>% 
+  dplyr::select(fecha,Usuario,Texto, Reforma)
+
+tweets_27_03 <- Reformas %>%
+  dplyr::filter(fecha == "2023-03-27") %>% 
+  dplyr::select(fecha,Usuario,Texto, Reforma)
+
+tweets_28_03 <- Reformas %>%
+  dplyr::filter(fecha == "2023-03-28") %>% 
+  dplyr::select(fecha,Usuario,Texto, Reforma)
+
+tweets_29_03 <- Reformas %>%
+  dplyr::filter(fecha == "2023-03-29") %>% 
+  dplyr::select(fecha,Usuario,Texto, Reforma)
+
+tweets_30_03 <- Reformas %>%
+  dplyr::filter(fecha == "2023-03-30") %>% 
+  dplyr::select(fecha,Usuario,Texto, Reforma)
+
+tweets_31_03 <- Reformas %>%
+  dplyr::filter(fecha == "2023-03-31") %>% 
+  dplyr::select(fecha,Usuario,Texto, Reforma)
+
+tweets_01_04 <- Reformas %>%
+  dplyr::filter(fecha == "2023-04-01") %>% 
+  dplyr::select(fecha,Usuario,Texto, Reforma)
+```
+
+# 3) Analisis exploratorio
+
+## 3.1) Estadisticas descritivas
+
+**Primero**, análisis estadístico descriptivo de #Petro
+
+```{r}
+skim(Numeral_Petro_sin_emojis)
+```
+
+**Segundo**, análisis estadístico descriptivo de tweets de petro
+
+```{r}
+skim(petro_comments_sin_emojis)
+```
+
+**Cuarto**, Conteo de retweets de Petro
+
+```{r}
+count(petro_comments_sin_emojis,Retweets)
+```
+
+## 3.2) Análisis de "hashtags"
+
+**Primero**, extraemos "hashtags"
+
+```{r}
+otros_numerales_numeral_petro  <- Numeral_Petro_sin_emojis %>% 
+  unnest_tokens(output = "hashtag", input = "Texto", token ="regex") %>%
+  dplyr::filter(str_starts(hashtag, "#"))
+
+head(otros_numerales_numeral_petro)
+```
+
+Este código toma el data frame Numeral_Petro_sin_emojis y, a partir de la columna Texto, separa el contenido en tokens usando una expresión regular mediante unnest_tokens, almacenando cada token en una nueva columna llamada hashtag; posteriormente filtra únicamente aquellos tokens que comienzan con el carácter #, es decir, los hashtags, y guarda el resultado en el objeto otros_numerales_numeral_petro, para finalmente mostrar las primeras filas de este nuevo conjunto de datos con head(), lo que permite inspeccionar rápidamente los hashtags extraídos del texto.
+
+**Segundo**, vemos cuales son los "hashtags" mas comunes
+
+```{r}
+Otros_numerales_petro <- otros_numerales_numeral_petro %>%
+  count(hashtag) %>%
+  arrange(-n) %>%
+  slice(1:20)
+
+head(Otros_numerales_petro)
+```
+
+## 3.3) Análisis de "arroba"
+
+**Primero**, extraemos "arrobas"
+
+```{r}
+otros_arrobas_numeral_petro  <- Numeral_Petro_sin_emojis %>% 
+  unnest_tokens(output = "arroba", input = "Texto", token ="regex") %>%
+  dplyr::filter(str_starts(arroba, "@"))
+```
+
+**Segundo**, vemos cuales son los "arrobas" mas comunes
+
+```{r}
+Otros_arrobas_petro <- otros_arrobas_numeral_petro %>%
+  count(arroba) %>%
+  arrange(-n) %>%
+  slice(1:20)
+```
+
+## 3.4) Análisis de corpus
+
+**Primero**, transformacioón a corpus y a dfm
+
+```{r}
+# almacenamos en corpus las variables  
+Numeral_Petro_corpus <- corpus(Numeral_Petro_sin_emojis$Texto)
+
+
+petro_comments_corpus <- corpus(petro_comments_sin_emojis$Texto)
+
+
+#Almacenamos en dfm las varibles
+dfmat_Numeral_Petro <- Numeral_Petro_sin_emojis$Texto %>%
+  tokens(
+    remove_punct = TRUE
+  ) %>%
+  tokens_remove(quanteda::stopwords("spanish")) %>%
+  dfm()
+ 
+
+dfmat_otros_numerales_numeral_petro <- otros_numerales_numeral_petro$hashtag %>%
+  tokens(
+    remove_punct = TRUE
+  ) %>%
+  tokens_remove(quanteda::stopwords("spanish")) %>%
+  dfm()
+
+
+dfmat_otros_arrobas_numeral_petro <- otros_arrobas_numeral_petro$arroba %>%
+  tokens(
+    remove_punct = TRUE
+  ) %>%
+  tokens_remove(quanteda::stopwords("spanish")) %>%
+  dfm()
+```
+
+**Segundo**, Análisis frecuencia
+
+```{r}
+
+# vemos las 20 palabras mas repetidas
+frecuencia_Numeral_Petro<- topfeatures(dfmat_Numeral_Petro,20)
+frecuencia_Numeral_Petro
+
+#Tranformaos esa lista de frecuencias en un data frame
+tabla_frecuencia_Numeral_Petro <- as.data.frame(frecuencia_Numeral_Petro)
+head(tabla_frecuencia_Numeral_Petro)
+
+# cremos df de caracteristicas 
+features_Numeral_Petro <- textstat_frequency(dfmat_Numeral_Petro, n = 20)
+head(features_Numeral_Petro)
+
+features_Otros_Numeral_Petro <- textstat_frequency(dfmat_otros_numerales_numeral_petro, n = 20)
+head(features_Otros_Numeral_Petro)
+
+features_otros_arrobas_numeral_petro <- textstat_frequency(dfmat_otros_numerales_numeral_petro, n = 20)
+head(features_otros_arrobas_numeral_petro)
+
+```
+
+Graficamos
+
+```{r message=FALSE, warning=FALSE}
+# Ordenar por orden de frecuencia inversa
+features_Numeral_Petro$feature <- with(features_Numeral_Petro, reorder(feature, -frequency))
+
+features_Otros_Numeral_Petro$feature <- with(features_Otros_Numeral_Petro, reorder(feature, -frequency))
+
+
+#nombramos variables en español para el grafico 
+colnames(features_Numeral_Petro)
+colnames(features_Numeral_Petro) <- c("Palabra","Frecuencia","rank", "docfreq","group")
+colnames(features_Otros_Numeral_Petro)  <- c("Palabra","Frecuencia","rank", "docfreq","group")
+
+#graficamos tabla de frecuencias de palabras====
+ggplot(features_Numeral_Petro, aes(x = Frecuencia, y = Palabra)) +
+  geom_point() +
+  theme(axis.text.x = element_text(angle = 0, hjust = 1))+
+  labs(title="FRECUENCIA DE PALABRAS",
+       subtitle = "De la mineria de datos con el #Petro",
+       caption="1,301 observaciones")
+
+
+#graficamos tabla de frecuencias de hashtags====
+ggplot(features_Otros_Numeral_Petro, aes(x = Frecuencia, y = Palabra)) +
+  geom_point() +
+  theme(axis.text.x = element_text(angle = 0, hjust = 1))+
+  labs(title="FRECUENCIA DE HASHTAGS",
+       subtitle = "De la mineria de datos con el #Petro",
+       caption="1,301 observaciones")
+
+#graficamos tabla de frecuencias de arrobas====
+ggplot(features_Otros_Numeral_Petro, aes(x = Frecuencia, y = Palabra)) +
+  geom_point() +
+  theme(axis.text.x = element_text(angle = 0, hjust = 1))+
+  labs(title="FRECUENCIA DE ARROBAS",
+       subtitle = "De la mineria de datos con el #Petro",
+       caption="1,301 observaciones")
+
+#grafico de serie temporal segun el uso de los hashtags====
+hashtags_weekly <- otros_numerales_numeral_petro %>%
+  mutate(day = floor_date(Fecha, "day", week_start = 1)) %>%
+  dplyr::filter(hashtag %in% c("#colombiavamal",
+                        "#colombiavabien")) %>%
+  count(hashtag, day)
+
+#graficamos =====
+ggplot(data = hashtags_weekly,
+       mapping = aes(x = day, y = n,
+                     linetype = hashtag, group = hashtag)) +
+  geom_point() +
+  geom_line() +
+  labs(x = "day", y = "Usos hashtag", linetype = "Hashtag") 
+
+#nube de palabra rumba====
+#https://quanteda.io/reference/textplot_wordcloud.html
+par(mar = c(5.5, 5.5, 4.1, 2.1))
+nube_palabras_numeral_petro <- textplot_wordcloud(dfmat_Numeral_Petro, min_freq = 2, random_order = FALSE,
+                                                  rotation = .25,
+                                                  min_size = 2.5,
+                                                  stem = TRUE, # todas las palabras asociadas las une
+                                                  colors = RColorBrewer::brewer.pal(8, "Dark2"))
+
+#añadimos  titulo al grafico de nube de palabras
+mtext("FRECUENCIA DE PALABRAS (#Petro)",
+      side=3, 
+      line=3, 
+      at=-0.07, 
+      adj=0, 
+      cex=1)
+
+```
+
+## 3.5) Análisis estadística de keyness
+
+La estadística de keyness es una medida usada en análisis de texto para identificar qué palabras o términos son distintivos de un subconjunto de documentos frente a otro, comparando sus frecuencias relativas entre ambos grupos; en la práctica, evalúa si un término aparece significativamente más (o menos) en el grupo objetivo que en el grupo de referencia, normalmente mediante una prueba estadística como el log-likelihood ratio (G²) o el chi-cuadrado, de modo que los términos con mayor keyness positiva se interpretan como más característicos del discurso analizado, mientras que valores negativos indican palabras más propias del contexto comparativo, lo que permite detectar patrones léxicos y asociaciones semánticas relevantes en estudios de discurso, opinión o análisis político.
+
+**Primero**, definimos vectores de palabras claves
+
+```{r}
+#diccionario sobre servicio, reservas, precios
+Laboral <-c("trabajo","Trabajo","TABAJO","laboral"," Laboral", "LABORAL", "Salario", "SAlARIO", "salario")
+
+Pensional <- c("Pension","pension","PENSION","Pensional","pensional","PENSIONAL")
+
+Salud <- c("salud","Salud","SALUD","Ips","ips","IPS","Eps","eps","EPS")
+
+```
+
+**Segundo**, tokenizamos
+
+```{r}
+toks_comments <- tokens(petro_comments_corpus, remove_punct = TRUE) %>%
+  tokens_remove(quanteda::stopwords("spanish"))
+
+
+
+# hacemos token phrases
+
+#reforma laboral
+toks_laboral_inside <- tokens_keep(toks_comments, pattern = phrase(Laboral), window = 10) 
+
+toks_laboral_inside <- tokens_remove(toks_laboral_inside, pattern = Laboral) # remove the keywords
+
+toks_laboral_outside <- tokens_remove(toks_comments , pattern = Laboral, window = 10)
+
+
+#reforma pensional
+toks_pensional_inside <- tokens_keep(toks_comments, pattern = phrase(Pensional), window = 10) 
+
+toks_pensional_inside <- tokens_remove(toks_pensional_inside, pattern = Pensional) # remove the keywords
+
+toks_pensional_outside <- tokens_remove(toks_comments , pattern = Pensional, window = 10)
+
+
+##reforma pensional
+toks_pensional_inside <- tokens_keep(toks_comments, pattern = phrase(Pensional), window = 10) 
+
+toks_pensional_inside <- tokens_remove(toks_pensional_inside, pattern = Pensional) # remove the keywords
+
+toks_pensional_outside <- tokens_remove(toks_comments , pattern = Pensional, window = 10)
+
+
+#reforma a la salud
+toks_salud_inside <- tokens_keep(toks_comments, pattern = phrase(Salud), window = 10) 
+
+toks_salud_inside <- tokens_remove(toks_salud_inside, pattern = Salud) # remove the keywords
+
+toks_salud_outside <- tokens_remove(toks_comments , pattern = Salud, window = 10)
+
+```
+
+En este bloque de código se tokeniza el corpus petro_comments_corpus eliminando signos de puntuación y quanteda::stopwords en español para obtener toks_comments, y a partir de estos tokens se construyen subconjuntos de contexto asociados a tres temas específicos (reforma laboral, pensional y de salud): para cada tema se extraen los tokens que aparecen dentro de una ventana de ±10 palabras alrededor de los términos clave (Laboral, Pensional, Salud) mediante tokens_keep, eliminando luego el propio término clave para analizar únicamente su contexto semántico, y paralelamente se generan conjuntos fuera de ese contexto usando tokens_remove con la misma ventana, lo que permite comparar el lenguaje utilizado en torno a cada reforma frente al resto del discurso.
+
+**Tercero**, convertimos a matrices documento-término (dfm)
+
+```{r}
+#hacemos asociacion de la palabra clave
+
+#laboral
+dfmat_inside <- dfm(toks_laboral_inside)
+dfmat_outside <- dfm(toks_laboral_outside)
+
+#Pensional
+dfmat_pensional_inside <- dfm(toks_pensional_inside)
+dfmat_pensional_outside <- dfm(toks_pensional_outside)
+
+#Salud
+dfmat_salud_inside <- dfm(toks_salud_inside)
+dfmat_salud_outside <- dfm(toks_salud_outside)
+```
+
+Este código convierte los conjuntos de tokens previamente definidos para cada tema (laboral, pensional y salud) en matrices documento-término (dfm), separando sistemáticamente el lenguaje que aparece dentro del contexto cercano a cada palabra clave (\*\_inside) del que aparece fuera de ese contexto (\*\_outside), con el objetivo de analizar y comparar la asociación y frecuencia de los términos utilizados alrededor de cada reforma frente al resto del discurso, lo que facilita identificar patrones léxicos y relaciones semánticas específicas asociadas a cada temática.
+
+**Cuarto**, calculamos estadistica de Keyness}
+
+```{r}
+#analisamos relacion de palabras 
+
+# target es nuestra palabra de interes
+# reference son los datos ( numero de comentarios) anaizados 
+#"chi2" este es el valor de chi-cuadrado, con signo positivo si el valor observado en el objetivo excede su valor esperado
+
+
+#laboral
+tstat_key_inside <- textstat_keyness(rbind(dfmat_inside, dfmat_outside), 
+                                     target = seq_len(ndoc(dfmat_inside)))
+head(tstat_key_inside, 50)
+
+#pensional
+tstat_key_pensional_inside <- textstat_keyness(rbind(dfmat_pensional_inside, dfmat_pensional_outside), 
+                                               target = seq_len(ndoc(dfmat_pensional_inside)))
+head(tstat_key_pensional_inside, 50)
+
+#salud
+tstat_key_salud_inside <- textstat_keyness(rbind(dfmat_salud_inside, dfmat_salud_outside), 
+                                           target = seq_len(ndoc(dfmat_salud_inside)))
+head(tstat_key_salud_inside, 50)
+
+```
+
+**Quinto**, graficamos
+
+```{r}
+# graficamos keyness====
+
+# Palabras claves laboral
+textplot_keyness(tstat_key_inside)
+laboral_plot <- textplot_keyness(tstat_key_inside, show_reference = FALSE)+
+  labs(title="REFORMA LABORAL",
+       subtitle = "análisis estadistico de palabras clave",
+       caption=paste0("2022/08/10 - 2023/04/02" ),
+       x="Chi-Cuadrado",
+       y="SALUD")
+
+# Palbaras clases pensional 
+textplot_keyness(tstat_key_pensional_inside)
+pensional_plot <- textplot_keyness(tstat_key_pensional_inside, show_reference = FALSE)+
+  labs(title="REFORMA PENSIONAL",
+       subtitle = "análisis estadistico de palabras clave",
+       caption=paste0("2022/08/10 - 2023/04/02" ),
+       x="Chi-Cuadrado",
+       y="SALUD")
+
+# Palabras clave salud
+textplot_keyness(tstat_key_salud_inside)
+salud_plot <- textplot_keyness(tstat_key_salud_inside, show_reference = FALSE) +
+  labs(title="REFORMA A LA SALUD",
+       subtitle = "análisis estadistico de palabras clave",
+       caption=paste0("2022/08/10 - 2023/04/02" ),
+       x="Chi-Cuadrado",
+       y="SALUD")
+
+#unimos graficos
+grid.arrange(laboral_plot,pensional_plot,salud_plot, ncol=3)
+
+```
+
+## 3.6) Análisis de palabras capitalizadas
+
+Para mayor documentacion consultar el siguente enlace: <https://ladal.edu.au/coll.html>
+
+**Primero**, tokenización y limpieza
+
+```{r}
+toks_comments <- tokens(
+  petro_comments_corpus,
+  remove_punct = TRUE
+) %>%
+  tokens_remove(quanteda::stopwords("spanish"))
+```
+
+**Segundo**, Seleccion de plabras capitalizadas
+
+```{r}
+toks_news_cap <- tokens_select(
+  toks_comments,
+  pattern = "^[A-Z]",
+  valuetype = "regex",
+  case_insensitive = FALSE,
+  padding = TRUE
+)
+```
+
+**Tercero**, Detección de colaciones
+
+```{r}
+tstat_col_cap <- textstat_collocations(
+  toks_news_cap,
+  min_count = 2,
+  tolower = FALSE
+)
+```
+
+Generemos tabla resumen
+
+```{r}
+# Tabla resumen
+Tabla <- as.data.frame(head(tstat_col_cap, 10))
+kbl(Tabla, caption = "Top colocaciones") %>%
+  kable_styling(full_width = FALSE)
+```
+
+**Cuarto**, Composto de colaciones
+
+```{r}
+toks_compound <- tokens_compound(
+  toks_news_cap,
+  pattern = tstat_col_cap
+)
+```
+
+**Quinto**, Matriz de co-ocurrencia
+
+```{r}
+fcm_cap <- fcm(toks_compound)
+
+```
+
+**Sexto**, Reducción simple de features (sin topfeatures)
+
+```{r}
+# Nos quedamos solo con términos que co-ocurren al menos X veces
+fcm_cap_reduced <- fcm_select(
+  fcm_cap,
+  pattern = featnames(fcm_cap)[
+    rowSums(fcm_cap) >= 10
+  ]
+)
+```
+
+**Octavo**, visualizacion de la red
+
+```{r}
+quanteda.textplots::textplot_network(
+  fcm_cap_reduced,
+  min_freq = 5,
+  edge_alpha = 0.5,
+  edge_color = "purple",
+  edge_size = 2
+)
+```
+
+# 4) Análisis de sentimientos
+
+## 4.1) Análisis de sentimento por dia (Reformas)
+
+**Primero**, tokenizamos los dias
+
+```{r}
+
+# tokenizamos los dias
+tokens_tweets_16_03 <- get_tokens(tweets_16_03$Texto)
+tokens_tweets_17_03 <- get_tokens(tweets_17_03$Texto)
+tokens_tweets_18_03 <- get_tokens(tweets_18_03$Texto)
+tokens_tweets_19_03 <- get_tokens(tweets_19_03$Texto)
+tokens_tweets_20_03 <- get_tokens(tweets_20_03$Texto)
+tokens_tweets_21_03 <- get_tokens(tweets_21_03$Texto)
+tokens_tweets_22_03 <- get_tokens(tweets_22_03$Texto)
+tokens_tweets_23_03 <- get_tokens(tweets_23_03$Texto)
+tokens_tweets_24_03 <- get_tokens(tweets_24_03$Texto)
+tokens_tweets_25_03 <- get_tokens(tweets_25_03$Texto)
+tokens_tweets_26_03 <- get_tokens(tweets_26_03$Texto)
+tokens_tweets_27_03 <- get_tokens(tweets_27_03$Texto)
+tokens_tweets_28_03 <- get_tokens(tweets_28_03$Texto)
+tokens_tweets_29_03 <- get_tokens(tweets_29_03$Texto)
+tokens_tweets_30_03 <- get_tokens(tweets_30_03$Texto)
+tokens_tweets_31_03 <- get_tokens(tweets_31_03$Texto)
+tokens_tweets_01_04 <- get_tokens(tweets_01_04$Texto)
+
+```
+
+Este bloque de código tokeniza el texto de los tweets día por día, es decir, transforma cada conjunto de mensajes almacenados en la columna Texto de los data frames diarios (tweets_16_03, tweets_17_03, etc.) en tokens, que normalmente corresponden a palabras (aunque pueden ser símbolos, números o n-gramas según la configuración). La función get_tokens() se utiliza para segmentar el texto en unidades lingüísticas básicas, lo que permite posteriormente calcular frecuencias, construir matrices documento-término (dfm), analizar vocabulario, tendencias léxicas o aplicar modelos de análisis textual. Este proceso se realiza usando la librería quanteda, que está diseñada para el análisis cuantitativo de texto a gran escala y ofrece una infraestructura eficiente y reproducible para trabajar con corpus textuales, especialmente útil en estudios de discurso, análisis político y minería de texto.
+
+**Segundo**, obtenemos polaridad de sentimientos y la media de casa sentimiento por dia
+
+```{r}
+# sentimientos_tokens_tweets_16_03 <-get_nrc_sentiment(tokens_tweets_16_03, lang="spanish") 
+# Media_Rabia_16_03 <- mean(sentimientos_tokens_tweets_16_03$anger)
+# Media_Anticipacion_16_03 <- mean(sentimientos_tokens_tweets_16_03$anticipation)
+# Media_Disgusto_16_03 <- mean(sentimientos_tokens_tweets_16_03$disgust)
+# Media_Miedo_16_03 <- mean(sentimientos_tokens_tweets_16_03$fear)
+# Media_Felicidad_16_03 <- mean(sentimientos_tokens_tweets_16_03$joy)
+# Media_Tristeza_16_03 <- mean(sentimientos_tokens_tweets_16_03$sadness)
+# Media_Confianza_16_03 <- mean(sentimientos_tokens_tweets_16_03$trust)
+# Media_Positivo_16_03 <- mean(sentimientos_tokens_tweets_16_03$positive)
+# Media_Negativo_16_03 <- mean(sentimientos_tokens_tweets_16_03$negative)
+# Media_16_03= data.frame(Media_Rabia_16_03, Media_Anticipacion_16_03,Media_Disgusto_16_03,Media_Miedo_16_03,Media_Felicidad_16_03,Media_Tristeza_16_03,Media_Confianza_16_03,Media_Positivo_16_03,Media_Negativo_16_03)
+# Media_16_03
+# 
+# sentimientos_tokens_tweets_17_03 <-get_nrc_sentiment(tokens_tweets_17_03, lang="spanish") 
+# Media_Rabia_17_03 <- mean(sentimientos_tokens_tweets_17_03$anger)
+# Media_Anticipacion_17_03 <- mean(sentimientos_tokens_tweets_17_03$anticipation)
+# Media_Disgusto_17_03 <- mean(sentimientos_tokens_tweets_17_03$disgust)
+# Media_Miedo_17_03 <- mean(sentimientos_tokens_tweets_17_03$fear)
+# Media_Felicidad_17_03 <- mean(sentimientos_tokens_tweets_17_03$joy)
+# Media_Tristeza_17_03 <- mean(sentimientos_tokens_tweets_17_03$sadness)
+# Media_Confianza_17_03 <- mean(sentimientos_tokens_tweets_17_03$trust)
+# Media_Positivo_17_03 <- mean(sentimientos_tokens_tweets_17_03$positive)
+# Media_Negativo_17_03 <- mean(sentimientos_tokens_tweets_17_03$negative)
+# Media_17_03 = data.frame(Media_Rabia_17_03, Media_Anticipacion_17_03,Media_Disgusto_17_03,Media_Miedo_17_03,Media_Felicidad_17_03,Media_Tristeza_17_03,Media_Confianza_17_03,Media_Positivo_17_03,Media_Negativo_17_03)
+# Media_17_03
+
+# sentimientos_tokens_tweets_18_03 <-get_nrc_sentiment(tokens_tweets_18_03, lang="spanish") 
+# Media_Rabia_18_03 <- mean(sentimientos_tokens_tweets_18_03$anger)
+# Media_Anticipacion_18_03 <- mean(sentimientos_tokens_tweets_18_03$anticipation)
+# Media_Disgusto_18_03 <- mean(sentimientos_tokens_tweets_18_03$disgust)
+# Media_Miedo_18_03 <- mean(sentimientos_tokens_tweets_18_03$fear)
+# Media_Felicidad_18_03 <- mean(sentimientos_tokens_tweets_18_03$joy)
+# Media_Tristeza_18_03 <- mean(sentimientos_tokens_tweets_18_03$sadness)
+# Media_Confianza_18_03 <- mean(sentimientos_tokens_tweets_18_03$trust)
+# Media_Positivo_18_03 <- mean(sentimientos_tokens_tweets_18_03$positive)
+# Media_Negativo_18_03 <- mean(sentimientos_tokens_tweets_18_03$negative)
+# Media_18_03 = data.frame(Media_Rabia_18_03, Media_Anticipacion_18_03,Media_Disgusto_18_03,Media_Miedo_18_03,Media_Felicidad_18_03,Media_Tristeza_18_03,Media_Confianza_18_03,Media_Positivo_18_03,Media_Negativo_18_03)
+# Media_18_03
+
+
+sentimientos_tokens_tweets_16_03 <- get_nrc_sentiment(tokens_tweets_16_03, lang="spanish")
+sentimientos_tokens_tweets_16_03$Price <- c(ColeqtyIndex[1,2])
+sentimientos_tokens_tweets_17_03 <- get_nrc_sentiment(tokens_tweets_17_03, lang="spanish")
+sentimientos_tokens_tweets_17_03$Price <- c(ColeqtyIndex[2,2])
+sentimientos_tokens_tweets_18_03 <- get_nrc_sentiment(tokens_tweets_18_03, lang="spanish")
+sentimientos_tokens_tweets_18_03$Price <- c(ColeqtyIndex[3,2])
+sentimientos_tokens_tweets_19_03 <-get_nrc_sentiment(tokens_tweets_19_03, lang="spanish")
+sentimientos_tokens_tweets_19_03$Price <- c(ColeqtyIndex[4,2])
+sentimientos_tokens_tweets_20_03 <-get_nrc_sentiment(tokens_tweets_20_03, lang="spanish")
+sentimientos_tokens_tweets_20_03$Price <- c(ColeqtyIndex[5,2])
+sentimientos_tokens_tweets_21_03 <-get_nrc_sentiment(tokens_tweets_21_03, lang="spanish")
+sentimientos_tokens_tweets_21_03$Price <- c(ColeqtyIndex[6,2])
+sentimientos_tokens_tweets_22_03 <-get_nrc_sentiment(tokens_tweets_22_03, lang="spanish")
+sentimientos_tokens_tweets_22_03$Price <- c(ColeqtyIndex[7,2])
+sentimientos_tokens_tweets_23_03 <-get_nrc_sentiment(tokens_tweets_23_03, lang="spanish")
+sentimientos_tokens_tweets_23_03$Price <- c(ColeqtyIndex[8,2])
+sentimientos_tokens_tweets_24_03 <-get_nrc_sentiment(tokens_tweets_24_03, lang="spanish")
+sentimientos_tokens_tweets_24_03$Price <- c(ColeqtyIndex[9,2])
+sentimientos_tokens_tweets_25_03 <-get_nrc_sentiment(tokens_tweets_25_03, lang="spanish")
+sentimientos_tokens_tweets_25_03$Price <- c(ColeqtyIndex[10,2])
+sentimientos_tokens_tweets_26_03 <-get_nrc_sentiment(tokens_tweets_26_03, lang="spanish")
+sentimientos_tokens_tweets_26_03$Price <- c(ColeqtyIndex[11,2])
+sentimientos_tokens_tweets_27_03 <-get_nrc_sentiment(tokens_tweets_27_03, lang="spanish")
+sentimientos_tokens_tweets_27_03$Price <- c(ColeqtyIndex[12,2])
+sentimientos_tokens_tweets_28_03 <-get_nrc_sentiment(tokens_tweets_28_03, lang="spanish")
+sentimientos_tokens_tweets_28_03$Price <- c(ColeqtyIndex[13,2])
+sentimientos_tokens_tweets_29_03 <-get_nrc_sentiment(tokens_tweets_29_03, lang="spanish")
+sentimientos_tokens_tweets_29_03$Price <- c(ColeqtyIndex[14,2])
+sentimientos_tokens_tweets_30_03 <-get_nrc_sentiment(tokens_tweets_30_03, lang="spanish")
+sentimientos_tokens_tweets_30_03$Price <- c(ColeqtyIndex[15,2])
+sentimientos_tokens_tweets_31_03 <-get_nrc_sentiment(tokens_tweets_31_03, lang="spanish")
+sentimientos_tokens_tweets_31_03$Price <- c(ColeqtyIndex[16,2])
+sentimientos_tokens_tweets_01_04 <-get_nrc_sentiment(tokens_tweets_01_04, lang="spanish")
+sentimientos_tokens_tweets_01_04$Price <- c(ColeqtyIndex[17,2])
+
+```
+
+Este bloque de código calcula el análisis de sentimiento diario de los tweets previamente tokenizados, aplicando el léxico NRC para identificar y cuantificar emociones básicas (como alegría, tristeza, ira, miedo, confianza, entre otras) y polaridad emocional a partir de los tokens de cada día. Para ello se utiliza la función get_nrc_sentiment() de la librería syuzhet, configurada en español (lang = "spanish"), la cual devuelve una tabla con los conteos agregados de emociones presentes en el texto de cada jornada. Posteriormente, a cada uno de estos data frames de sentimiento se le añade una variable Price, que incorpora el valor correspondiente (extraído de ColeqtyIndex) al mismo día de análisis, permitiendo así vincular el comportamiento emocional del discurso en Twitter con una variable cuantitativa externa, lo que facilita análisis posteriores de correlación, tendencias temporales o modelos explicativos entre sentimiento y precio.
+
+Por ejemplo, si el resultado del análisis de sentimiento para un día muestra un valor de **3 en *joy***, **0 en *sadness*** y **1 en *surprise***, esto significa que, dentro del conjunto total de palabras (tokens) extraídas de los tweets de ese día, el léxico NRC identificó **tres palabras asociadas semánticamente a alegría**, **ninguna palabra asociada a tristeza** y **una palabra vinculada a sorpresa**; es decir, los valores representan **frecuencias absolutas de aparición de términos emocionales** y no niveles de intensidad ni proporciones, por lo que un cero indica ausencia total de ese tipo de emoción en el discurso del día y un valor mayor refleja mayor presencia relativa de vocabulario asociado a dicha emoción en los tweets analizados.
+
+**Tercero**, creamos tabla con las variables del diccionario léxico
+
+```{r}
+#Tabla de setimientos
+tablasentim <- rbind(sentimientos_tokens_tweets_16_03,sentimientos_tokens_tweets_17_03)
+tablasentim2 <- rbind(tablasentim,sentimientos_tokens_tweets_18_03)
+tablasentim3 <- rbind(tablasentim2,sentimientos_tokens_tweets_19_03)
+tablasentim4 <- rbind(tablasentim3,sentimientos_tokens_tweets_20_03)
+tablasentim5 <- rbind(tablasentim4,sentimientos_tokens_tweets_21_03)
+tablasentim6 <- rbind(tablasentim5,sentimientos_tokens_tweets_22_03)
+tablasentim7 <- rbind(tablasentim6,sentimientos_tokens_tweets_23_03)
+tablasentim8 <- rbind(tablasentim7,sentimientos_tokens_tweets_24_03)
+tablasentim9 <- rbind(tablasentim8,sentimientos_tokens_tweets_25_03)
+tablasentim10 <- rbind(tablasentim9,sentimientos_tokens_tweets_26_03)
+tablasentim11 <- rbind(tablasentim10,sentimientos_tokens_tweets_27_03)
+tablasentim12 <- rbind(tablasentim11,sentimientos_tokens_tweets_28_03)
+tablasentim13 <- rbind(tablasentim12,sentimientos_tokens_tweets_29_03)
+tablasentim14 <- rbind(tablasentim13,sentimientos_tokens_tweets_30_03)
+tablasentim15 <- rbind(tablasentim14,sentimientos_tokens_tweets_31_03)
+tablasentim_regex <- rbind(tablasentim15,sentimientos_tokens_tweets_01_04)
+
+```
+
+**Cuarto**, creamos sentimientos para el dia 28 de marzo (caso especial que no genero datos la extraccion de los tweets)
+
+```{r}
+surprise <- 0
+sadness <- 0
+anger <- 0
+disgust <- 0
+joy <- 0
+anticipation <- 0
+fear <- 0
+trust <- 0
+
+```
+
+**Quinto**, porcentualidad del sentimiento segun dias
+
+```{r}
+
+
+# Porcentualidad del sentimiento según días (CON sort())
+sentimientos_tokens_tweets_16_03_porcentaje <- round(sort(colSums(prop.table(sentimientos_tokens_tweets_16_03[, 1:8])))*100)
+sentimientos_tokens_tweets_17_03_porcentaje <- round(sort(colSums(prop.table(sentimientos_tokens_tweets_17_03[, 1:8])))*100)
+sentimientos_tokens_tweets_18_03_porcentaje <- round(sort(colSums(prop.table(sentimientos_tokens_tweets_18_03[, 1:8])))*100)
+sentimientos_tokens_tweets_19_03_porcentaje <- round(sort(colSums(prop.table(sentimientos_tokens_tweets_19_03[, 1:8])))*100)
+sentimientos_tokens_tweets_20_03_porcentaje <- round(sort(colSums(prop.table(sentimientos_tokens_tweets_20_03[, 1:8])))*100)
+sentimientos_tokens_tweets_21_03_porcentaje <- round(sort(colSums(prop.table(sentimientos_tokens_tweets_21_03[, 1:8])))*100)
+sentimientos_tokens_tweets_22_03_porcentaje <- round(sort(colSums(prop.table(sentimientos_tokens_tweets_22_03[, 1:8])))*100)
+sentimientos_tokens_tweets_23_03_porcentaje <- round(sort(colSums(prop.table(sentimientos_tokens_tweets_23_03[, 1:8])))*100)
+sentimientos_tokens_tweets_24_03_porcentaje <- round(sort(colSums(prop.table(sentimientos_tokens_tweets_24_03[, 1:8])))*100)
+sentimientos_tokens_tweets_25_03_porcentaje <- round(sort(colSums(prop.table(sentimientos_tokens_tweets_25_03[, 1:8])))*100)
+sentimientos_tokens_tweets_26_03_porcentaje <- round(sort(colSums(prop.table(sentimientos_tokens_tweets_26_03[, 1:8])))*100)
+sentimientos_tokens_tweets_27_03_porcentaje <- round(sort(colSums(prop.table(sentimientos_tokens_tweets_27_03[, 1:8])))*100)
+sentimientos_tokens_tweets_28_03_porcentaje <- round(sort(colSums(prop.table(sentimientos_tokens_tweets_28_03[, 1:8])))*100)
+sentimientos_tokens_tweets_29_03_porcentaje <- round(sort(colSums(prop.table(sentimientos_tokens_tweets_29_03[, 1:8])))*100)
+sentimientos_tokens_tweets_30_03_porcentaje <- round(sort(colSums(prop.table(sentimientos_tokens_tweets_30_03[, 1:8])))*100)
+sentimientos_tokens_tweets_31_03_porcentaje <- round(sort(colSums(prop.table(sentimientos_tokens_tweets_31_03[, 1:8])))*100)
+sentimientos_tokens_tweets_01_04_porcentaje <- round(sort(colSums(prop.table(sentimientos_tokens_tweets_01_04[, 1:8])))*100)
+
+# Manejar valores NaN y reemplazar por cero (ocurre cuando todos los sentimientos son 0, ej. 28_03)
+sentimientos_tokens_tweets_28_03_porcentaje[is.nan(sentimientos_tokens_tweets_28_03_porcentaje)] <- 0
+
+
+```
+
+En esta sección de a cada sentimiento se le aplica lo siguente:
+
+1.  Tomamos las columnas de la 1 a la 8 que son todas las columnas de los sentimientos
+
+```{r}
+sentimientos_tokens_tweets_16_03[, 1:8]
+```
+
+2.  Esta tabla de sentimientos le sacamos la proporcion $proporción_{ij}=\frac{x_{ij}}{\sum_{ij}x_{ij}}$: Esta indica la proporcion del token de dicho sentimiento en la totalidad de los datos, unicamete para los sentimientos de ese dia. Es decir, la fracción del total de ocurrencias emocionales del día que corresponde a este token–sentimiento
+
+```{r}
+prop.table(sentimientos_tokens_tweets_16_03[, 1:8])
+
+```
+
+3.  Posteriormente sumamos la totalidad de la columna, para saber el valor total en términos proporciónale del sentimiento de ese día
+
+```{r}
+colSums(prop.table(sentimientos_tokens_tweets_16_03[, 1:8]))
+```
+
+4.  Ordenamos para tener claridad de cual fue el sentimiento dominante y multiplicamos por cien
+
+```{r}
+sort(colSums(prop.table(sentimientos_tokens_tweets_16_03[, 1:8])))*100
+
+```
+
+5.  Finalmente redondeamos para hacerlo mas claro
+
+```{r}
+round(sort(colSums(prop.table(sentimientos_tokens_tweets_16_03[, 1:8])))*100)
+
+```
+
+**Quinto**, Creación de Serie Temporal ts_sentiment (CORREGIDO)
+
+# El sort rompe la logica semantica
+
+```{r}
+# Vector de fechas
+fechas_completas <- c("2023-03-16", "2023-03-17", "2023-03-18","2023-03-19","2023-03-20",
+                      "2023-03-21","2023-03-22","2023-03-23","2023-03-24","2023-03-25",
+                      "2023-03-26","2023-03-27","2023-03-28","2023-03-29","2023-03-30",
+                      "2023-03-31","2023-04-01")
+
+# FUNCIÓN CRÍTICA: Elimina nombres de emociones de los vectores ordenados
+# Esto es ESENCIAL para que los valores ordenados se asignen correctamente a las columnas español
+# Construye una fila diaria de sentimientos a partir de un vector ordenado
+# Elimina los nombres de emociones para evitar reasignaciones incorrectas
+# y asocia explícitamente la fecha correspondiente
+make_row <- function(pct_vec, date_val) {
+  vals <- as.numeric(pct_vec)        # Elimina nombres y conserva el orden numérico
+  df <- as.data.frame(t(vals))       # Convierte el vector en una fila
+  df <- mutate(df, Fecha = date_val, .before = 1)  # Añade la fecha como identificador
+  return(df)
+}
+
+# Combinar todos los datos usando make_row() para eliminar nombres de emociones
+ts_sentiment <- bind_rows(
+  make_row(sentimientos_tokens_tweets_16_03_porcentaje, fechas_completas[1]),
+  make_row(sentimientos_tokens_tweets_17_03_porcentaje, fechas_completas[2]),
+  make_row(sentimientos_tokens_tweets_18_03_porcentaje, fechas_completas[3]),
+  make_row(sentimientos_tokens_tweets_19_03_porcentaje, fechas_completas[4]),
+  make_row(sentimientos_tokens_tweets_20_03_porcentaje, fechas_completas[5]),
+  make_row(sentimientos_tokens_tweets_21_03_porcentaje, fechas_completas[6]),
+  make_row(sentimientos_tokens_tweets_22_03_porcentaje, fechas_completas[7]),
+  make_row(sentimientos_tokens_tweets_23_03_porcentaje, fechas_completas[8]),
+  make_row(sentimientos_tokens_tweets_24_03_porcentaje, fechas_completas[9]),
+  make_row(sentimientos_tokens_tweets_25_03_porcentaje, fechas_completas[10]),
+  make_row(sentimientos_tokens_tweets_26_03_porcentaje, fechas_completas[11]),
+  make_row(sentimientos_tokens_tweets_27_03_porcentaje, fechas_completas[12]),
+  make_row(sentimientos_tokens_tweets_28_03_porcentaje, fechas_completas[13]),
+  make_row(sentimientos_tokens_tweets_29_03_porcentaje, fechas_completas[14]),
+  make_row(sentimientos_tokens_tweets_30_03_porcentaje, fechas_completas[15]),
+  make_row(sentimientos_tokens_tweets_31_03_porcentaje, fechas_completas[16]),
+  make_row(sentimientos_tokens_tweets_01_04_porcentaje, fechas_completas[17])
+)
+
+# Asignar nombres de columnas en español a los valores ordenados numéricamente
+colnames(ts_sentiment) <- c("Fecha","sorpresa","tristeza","enfado","disgusto","felicidad","anticipacion","miedo","confianza")
+
+# Reemplazar NAs con 0 en la fila 13 (2023-03-28)
+ts_sentiment[13, 2:9] <- 0
+
+
+```
+
+## 4.2) Analisis de polaridad por dia (Reformas)
+
+# Validar el uso del sort
+
+**Primero**, calculamos el porcentaje de polaridad por dia:
+
+```{r}
+# porcentualidad de la polaridad segun dias 
+polaridad_tokens_tweets_16_03_porcentaje <- round(sort(colSums(prop.table(sentimientos_tokens_tweets_16_03[, 9:10])))*100)
+polaridad_tokens_tweets_17_03_porcentaje <- round(sort(colSums(prop.table(sentimientos_tokens_tweets_17_03[, 9:10])))*100)
+polaridad_tokens_tweets_18_03_porcentaje <- round(sort(colSums(prop.table(sentimientos_tokens_tweets_18_03[, 9:10])))*100)
+polaridad_tokens_tweets_19_03_porcentaje <- round(sort(colSums(prop.table(sentimientos_tokens_tweets_19_03[, 9:10])))*100)
+polaridad_tokens_tweets_20_03_porcentaje <- round(sort(colSums(prop.table(sentimientos_tokens_tweets_20_03[, 9:10])))*100)
+polaridad_tokens_tweets_21_03_porcentaje <- round(sort(colSums(prop.table(sentimientos_tokens_tweets_21_03[, 9:10])))*100)
+polaridad_tokens_tweets_22_03_porcentaje <- round(sort(colSums(prop.table(sentimientos_tokens_tweets_22_03[, 9:10])))*100)
+polaridad_tokens_tweets_23_03_porcentaje <- round(sort(colSums(prop.table(sentimientos_tokens_tweets_23_03[, 9:10])))*100)
+polaridad_tokens_tweets_24_03_porcentaje <- round(sort(colSums(prop.table(sentimientos_tokens_tweets_24_03[, 9:10])))*100)
+polaridad_tokens_tweets_25_03_porcentaje <- round(sort(colSums(prop.table(sentimientos_tokens_tweets_25_03[, 9:10])))*100)
+polaridad_tokens_tweets_26_03_porcentaje <- round(sort(colSums(prop.table(sentimientos_tokens_tweets_26_03[, 9:10])))*100)
+polaridad_tokens_tweets_27_03_porcentaje <- round(sort(colSums(prop.table(sentimientos_tokens_tweets_27_03[, 9:10])))*100)
+polaridad_tokens_tweets_28_03_porcentaje <- round(sort(colSums(prop.table(sentimientos_tokens_tweets_28_03[, 9:10])))*100)
+polaridad_tokens_tweets_29_03_porcentaje <- round(sort(colSums(prop.table(sentimientos_tokens_tweets_29_03[, 9:10])))*100)
+polaridad_tokens_tweets_30_03_porcentaje <- round(sort(colSums(prop.table(sentimientos_tokens_tweets_30_03[, 9:10])))*100)
+polaridad_tokens_tweets_31_03_porcentaje <- round(sort(colSums(prop.table(sentimientos_tokens_tweets_31_03[, 9:10])))*100)
+polaridad_tokens_tweets_01_04_porcentaje <- round(sort(colSums(prop.table(sentimientos_tokens_tweets_01_04[, 9:10])))*100)
+
+
+```
+
+**Segundo**, creamos tabla de las poaridades por dia
+
+```{r}
+#Tabla de polaridades
+tabla_polaridad <- rbind(polaridad_tokens_tweets_16_03_porcentaje,polaridad_tokens_tweets_17_03_porcentaje)
+tabla2_polaridad <- rbind(tabla_polaridad,polaridad_tokens_tweets_18_03_porcentaje)
+tabla3_polaridad <- rbind(tabla2_polaridad,polaridad_tokens_tweets_19_03_porcentaje)
+tabla4_polaridad <- rbind(tabla3_polaridad,polaridad_tokens_tweets_20_03_porcentaje)
+tabla5_polaridad <- rbind(tabla4_polaridad,polaridad_tokens_tweets_21_03_porcentaje)
+tabla6_polaridad <- rbind(tabla5_polaridad,polaridad_tokens_tweets_22_03_porcentaje)
+tabla7_polaridad <- rbind(tabla6_polaridad,polaridad_tokens_tweets_23_03_porcentaje)
+tabla8_polaridad <- rbind(tabla7_polaridad,polaridad_tokens_tweets_24_03_porcentaje)
+tabla9_polaridad <- rbind(tabla8_polaridad,polaridad_tokens_tweets_25_03_porcentaje)
+tabla10_polaridad <- rbind(tabla9_polaridad,polaridad_tokens_tweets_26_03_porcentaje)
+tabla11_polaridad <- rbind(tabla10_polaridad,polaridad_tokens_tweets_27_03_porcentaje)
+tabla12_polaridad <- rbind(tabla11_polaridad,polaridad_tokens_tweets_28_03_porcentaje)
+tabla13_polaridad <- rbind(tabla12_polaridad,polaridad_tokens_tweets_29_03_porcentaje)
+tabla14_polaridad <- rbind(tabla13_polaridad,polaridad_tokens_tweets_30_03_porcentaje)
+tabla15_polaridad <- rbind(tabla14_polaridad,polaridad_tokens_tweets_31_03_porcentaje)
+ts_polaridad <- rbind(tabla15_polaridad,polaridad_tokens_tweets_01_04_porcentaje)
+ts_polaridad <- as.data.frame(ts_polaridad)
+
+ts_polaridad$Fecha <- c("2023-03-16", "2023-03-17", "2023-03-18","2023-03-19","2023-03-20","2023-03-21","2023-03-22","2023-03-23","2023-03-24","2023-03-25","2023-03-26","2023-03-27","2023-03-28","2023-03-29","2023-03-30","2023-03-31","2023-04-01")
+
+colnames(ts_polaridad) <- c("Negativo","Positivo","Fecha")
+
+
+colnames(ts_polaridad)
+```
+
+**Tercero**, tomamos columnas de interes:
+
+```{r}
+
+ts_polaridad <- ts_polaridad %>% 
+  dplyr::select(Fecha, Negativo,Positivo)
+```
+
+## 4.3) Graficos
+
+### 4.3.1) Graficos de sentimientos (Reformas)
+
+**Primero**, Grafico de serie de tiempo con sentimientos suavizados
+
+```{r}
+#agregagamos linea de tendencia 
+ggplot(data=ts_sentiment,mapping = aes(x = Fecha, group=1)) +
+  geom_smooth(mapping = aes(y = sorpresa, color="sorpresa"), linetype = 1,se = FALSE) +
+  geom_smooth(mapping = aes(y = tristeza,color="tristeza"), linetype = 2,se = FALSE) +
+  geom_smooth(mapping = aes(y = enfado,color="enfado"), linetype = 3,se = FALSE) +
+  geom_smooth(mapping = aes(y = disgusto,color="disgusto"), linetype = 4,se = FALSE) +
+  geom_smooth(mapping = aes(y = felicidad,color="felicidad"), linetype = 5,se = FALSE) +
+  geom_smooth(mapping = aes(y = anticipacion,color="anticipacion"), linetype = 6,se = FALSE) +
+  geom_smooth(mapping = aes(y = miedo,color="miedo"), linetype = 7,se = FALSE) +
+  geom_smooth(mapping = aes(y = confianza,color="confianza"), linetype = 8,se = FALSE) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5)) +
+  #scale_x_continuous("años", labels = as.character(años), breaks = años) +
+  #scale_y_continuous(labels = function(x) paste0(x,"%")) +
+  labs(title="Analisis de serie temporal",
+       subtitle = "Porcentaje segun sentimientos",
+       caption=paste0("Fecha: 16 de marzo a 1 de abril" ),
+       x="Dias",
+       y="Porcentaje",
+       color="Sentimiento")
+
+```
+
+**segundo**, Grafico de serie de tiempo con sentimientos sin suavizar
+
+```{r}
+ggplot(data=ts_sentiment,mapping = aes(x = Fecha, group=1)) +
+  geom_line(mapping = aes(y = sorpresa, color="sorpresa")) +
+  geom_point(mapping = aes(y = sorpresa),shape=0, size=3, colour="black", fill="yellow", show.legend = TRUE) +
+  geom_line(mapping = aes(y = tristeza,color="tristeza")) +
+  geom_point(mapping = aes(y = tristeza),shape=1, size=3, colour="black", fill="yellow", show.legend = TRUE) +
+  geom_line(mapping = aes(y = enfado,color="enfado")) +
+  geom_point(mapping = aes(y = enfado,color="enfado"),shape=2, size=3, colour="black", fill="yellow", show.legend = TRUE) +
+  geom_line(mapping = aes(y = disgusto,color="disgusto")) +
+  geom_point(mapping = aes(y = disgusto,color="disgusto"),shape=3, size=3, colour="black", fill="yellow", show.legend = TRUE) +
+  geom_line(mapping = aes(y = felicidad,color="felicidad")) +
+  geom_point(mapping = aes(y = felicidad,color="felicidad"),shape=4, size=3, colour="black", fill="yellow", show.legend = TRUE) +
+  geom_line(mapping = aes(y = anticipacion,color="anticipacion")) +
+  geom_point(mapping = aes(y = anticipacion,color="anticipacion"),shape=5, size=3, colour="black", fill="yellow", show.legend = TRUE)  +
+  geom_line(mapping = aes(y = miedo,color="miedo")) +
+  geom_point(mapping = aes(y = miedo,color="miedo"),shape=17, size=6, colour="black", fill="yellow", show.legend = TRUE) +
+  geom_line(mapping = aes(y = confianza,color="confianza")) +
+  geom_point(mapping = aes(y = confianza,color="confianza"),shape=7, size=3, colour="black", fill="yellow", show.legend = TRUE) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5)) +
+  #scale_x_continuous("años", labels = as.character(años), breaks = años) +
+  #scale_y_continuous(labels = function(x) paste0(x,"%")) +
+  labs(title="Analisis de serie temporal",
+       subtitle = "Porcentaje segun sentimientos",
+       caption=paste0("Fecha: 16 de marzo a 1 de abril" ),
+       x="Dias",
+       y="Porcentaje",
+       color="Sentimiento"
+  )
+```
+
+### 4.3.2) Graficos de polaridades
+
+**Primero**, grafico de linea de tiempo suavizada
+
+```{r}
+#agregagamos linea de tendencia 
+ggplot(data=ts_polaridad,mapping = aes(x = Fecha, group=1)) +
+  geom_smooth(mapping = aes(y = Negativo, color="Negativo"), linetype = 1,se = FALSE) +
+  geom_smooth(mapping = aes(y = Positivo,color="Positivo"), linetype = 2,se = FALSE) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5)) +
+  #scale_x_continuous("años", labels = as.character(años), breaks = años) +
+  #scale_y_continuous(labels = function(x) paste0(x,"%")) +
+  labs(title="Analisis de serie temporal",
+       subtitle = "Porcentaje segun polaridad",
+       caption=paste0("Fecha: 16 de marzo a 1 de abril" ),
+       x="Dias",
+       y="Porcentaje",
+       color="Polaridad")
+```
+
+**Segundo**, grafico sin serie de tiempo sin suavizar
+
+```{r}
+#agregagamos linea de tendencia a cada especie 
+ggplot(data=ts_polaridad,mapping = aes(x = Fecha, group=1)) +
+  geom_line(mapping = aes(y = Negativo, color="Negativo")) +
+  geom_point(mapping = aes(y = Negativo),shape=0, size=3, colour="black", fill="yellow", show.legend = TRUE) +
+  geom_line(mapping = aes(y = Positivo,color="Positivo")) +
+  geom_point(mapping = aes(y = Positivo),shape=1, size=3, colour="black", fill="yellow", show.legend = TRUE) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5)) +
+  #scale_x_continuous("años", labels = as.character(años), breaks = años) +
+  #scale_y_continuous(labels = function(x) paste0(x,"%")) +
+  labs(title="Analisis de serie temporal",
+       subtitle = "Porcentaje segun Polaridad",
+       caption=paste0("Fecha: 16 de marzo a 1 de abril" ),
+       x="Dias",
+       y="Porcentaje",
+       color="Polaridad"
+  )
+```
+
+## 4.4) Análisis sentimientos #Petro
+
+**Primero**, Tokenización
+```{r}
+##Petro
+tokens_numeral_petro <- get_tokens(Numeral_Petro_sin_emojis$Texto)
+head(tokens_numeral_petro)
+
+# Reforma laboral
+tokens_laboral <- get_tokens(Reforma_laboral_sin_emojis$Texto)
+head(tokens_laboral)
+
+#Reforma pensional
+tokens_pensional <- get_tokens(Reforma_pensional_sin_emojis$Texto)
+head(tokens_pensional)
+
+# Reforma salud
+tokens_salud <- get_tokens(Reforma_salud_sin_emojis$Texto)
+head(tokens_salud)
+```
+
+**Segundo** Calculamos Polaridad (NRC / Syuzhet)
+
+```{r}
+#Cálculo de polaridad por tema
+s_numeral_petro <- get_sentiment(tokens_numeral_petro, method = "nrc", lexicon = NULL, lang="spanish")
+s_laboral <- get_sentiment(tokens_laboral, method = "nrc", lexicon = NULL, lang="spanish")
+s_pensional <- get_sentiment(tokens_pensional, method = "nrc", lexicon = NULL, lang="spanish")
+s_salud <- get_sentiment(tokens_salud, method = "nrc", lexicon = NULL, lang="spanish")
+
+#Resumen estadístico de polaridad
+summary(s_numeral_petro)
+summary(s_laboral)
+summary(s_pensional)
+summary(s_salud)
+
+# Visualización de polaridad (ejemplo)
+plot(s_laboral, type = "l", xlab="conglomerado palabras", ylab="grado de polaridad", col="red")
+abline(h=0, col="black")
+
+```
+
+
+**Tercero** Hacemos transformación DCT (Discreta del Coseno)
+
+```{r}
+## Cálculo DCT por tema
+dct_values_laboral <- get_dct_transform(s_laboral, low_pass_size=5, x_reverse_len=100, scale_vals=FALSE, scale_range=TRUE)
+dct_values_pensional <- get_dct_transform(s_pensional, low_pass_size=5, x_reverse_len=100, scale_vals=FALSE, scale_range=TRUE)
+dct_values_salud <- get_dct_transform(s_salud, low_pass_size=5, x_reverse_len=100, scale_vals=FALSE, scale_range=TRUE)
+
+## Resumen estadístico DCT
+summary(dct_values_laboral)
+summary(dct_values_pensional)
+summary(dct_values_salud)
+
+## Gráficos DCT individuales
+par(mar=c(1,1,1,1))
+par(mfcol = c(1,3))
+
+plot(dct_values_laboral, type = "l", xlab="conglomerado palabras", ylab="transformacion discreta de coseno", col="red",
+     main ="Reforma Laboral", sub="722 observaciones")
+abline(h=0, col="black")
+
+plot(dct_values_pensional, type = "l", xlab="conglomerado palabras", ylab="transformacion discreta de coseno", col="red",
+     main ="Reforma Pensional", sub="687 observaciones")
+abline(h=0, col="black")
+
+plot(dct_values_salud, type = "l", xlab="conglomerado palabras", ylab="transformacion discreta de coseno", col="red",
+     main ="Reforma Salud", sub="1616 observaciones")
+abline(h=0, col="black")
+
+## Comparación conjunta DCT
+plot(cbind(dct_values_laboral, dct_values_pensional, dct_values_salud), main="comparacion")
+
+```
+
+
+**Cuarto**, calculamos sentimientos Primarios (NRC)
+
+```{r}
+## Matriz de sentimientos
+sentimientos_numeral_petro <- get_nrc_sentiment(tokens_numeral_petro, lang="spanish")
+head(sentimientos_numeral_petro)
+
+## Renombrar etiquetas a español
+colnames(sentimientos_numeral_petro) <- c("Enfado","Anticipación","Disgusto", "Miedo","Felicidad","Tristeza","Sorpresa","Confianza","Negativo","Positivo")
+
+##Resumen estadístico
+summary(sentimientos_numeral_petro)
+
+##Porcentajes y etiquetas
+sentimientos_numeral_petro_porcentaje <- round(sort(colSums(prop.table(sentimientos_numeral_petro[, 1:8])))*100)
+polaridad_numeral_petro_porcentaje <- round(sort(colSums(prop.table(sentimientos_numeral_petro[, 9:10])))*100)
+
+lbls_senti_numeral_petro <- paste(sentimientos_numeral_petro_porcentaje,"%",sep="")
+lbls_polar_numeral_petro <- paste(polaridad_numeral_petro_porcentaje,"%",sep="")
+
+```
+
+### 4.4.1) Visualizaciones
+
+**Primero**, barras de emociones
+```{r}
+par(mar = c(5.5, 5.5, 4.1, 2.1))
+
+bar_sent_numeral_petro <- barplot(
+  sentimientos_numeral_petro_porcentaje,
+  space = 0.2,
+  horiz = FALSE,
+  las = 1,
+  cex.names = 0.7,
+  col = brewer.pal(n = 8, name = "Set3"),
+  main = "Analisis sentimental",
+  sub = "(#Petro)",
+  xlab="emociones", ylab = "porcentaje", ylim = c(0,35)
+)
+text(x=bar_sent_numeral_petro, y=sentimientos_numeral_petro_porcentaje, label=lbls_senti_numeral_petro, pos=3, cex=0.8, col="red")
+```
+
+**Segundo**, barra de polaridad
+```{r}
+bar_polar_numeral_petro <- barplot(
+  polaridad_numeral_petro_porcentaje,
+  space = 0.2,
+  horiz = FALSE,
+  las = 1,
+  cex.names = 0.7,
+  col = brewer.pal(n = 8, name = "Set3"),
+  main = "Analisis polaridad frase",
+  sub = "(#Petro)",
+  xlab="polaridad", ylab = "porcentaje", ylim = c(0,100)
+)
+text(x=bar_polar_numeral_petro, y=polaridad_numeral_petro_porcentaje, label=lbls_polar_numeral_petro, pos=3, cex=0.8, col="red")
+
+```
+
+
+**Tercero**, nube de palabras
+```{r}
+
+## Preparación de corpus negativo/positivo
+nube_emociones_numeral_petro_negativo <- c(
+  paste(tokens_numeral_petro[sentimientos_numeral_petro$Tristeza > 0], collapse = " "),
+  paste(tokens_numeral_petro[sentimientos_numeral_petro$Disgusto > 0], collapse = " "),
+  paste(tokens_numeral_petro[sentimientos_numeral_petro$Enfado > 0], collapse = " "),
+  paste(tokens_numeral_petro[sentimientos_numeral_petro$Miedo > 0], collapse = " ")
+)
+
+nube_emociones_numeral_petro_positivo <- c(
+  paste(tokens_numeral_petro[sentimientos_numeral_petro$Anticipación > 0], collapse = " "),
+  paste(tokens_numeral_petro[sentimientos_numeral_petro$Felicidad > 0], collapse = " "),
+  paste(tokens_numeral_petro[sentimientos_numeral_petro$Sorpresa > 0], collapse = " "),
+  paste(tokens_numeral_petro[sentimientos_numeral_petro$Confianza > 0], collapse = " ")
+)
+
+nube_polaridad_numeral_petro_vector <- c(
+  paste(tokens_numeral_petro[sentimientos_numeral_petro$Positivo > 0], collapse = " "),
+  paste(tokens_numeral_petro[sentimientos_numeral_petro$Negativo > 0], collapse = " ")
+)
+
+##  Matrices término-documento
+nube_emociones_vector_negativo_numeral_petro <- iconv(nube_emociones_numeral_petro_negativo, "latin1", "UTF-8")
+nube_emociones_vector_positivo_numeral_petro <- iconv(nube_emociones_numeral_petro_positivo, "latin1", "UTF-8")
+nube_polaridad_vector_numeral_petro <- iconv(nube_polaridad_numeral_petro_vector, "latin1", "UTF-8")
+
+nube_corpus_negativo_numeral_petro <- Corpus(VectorSource(nube_emociones_vector_negativo_numeral_petro))
+nube_corpus_positivo_numeral_petro <- Corpus(VectorSource(nube_emociones_vector_positivo_numeral_petro))
+nube_corpus_polaridad_numeral_petro <- Corpus(VectorSource(nube_polaridad_vector_numeral_petro))
+
+nube_tdm_negativo_numeral_petro  <- as.matrix(TermDocumentMatrix(nube_corpus_negativo_numeral_petro))
+nube_tdm_positivo_numeral_petro  <- as.matrix(TermDocumentMatrix(nube_corpus_positivo_numeral_petro))
+nube_tdm_polaridad_numeral_petro <- as.matrix(TermDocumentMatrix(nube_corpus_polaridad_numeral_petro))
+
+colnames(nube_tdm_negativo_numeral_petro) <- c('Tristeza', 'Disgusto', 'Enfado', 'Miedo')
+colnames(nube_tdm_positivo_numeral_petro) <- c('Anticipación', 'Felicidad', 'Sorpresa', 'Confianza')
+colnames(nube_tdm_polaridad_numeral_petro) <- c('Positivo', 'Negativo')
+
+## Nubes comparativas por emoción
+par(mar = c(2.1, 2.1, 1.1, 1.1))
+par(mfrow=c(1,3))
+
+set.seed(757)
+comparison.cloud(nube_tdm_negativo_numeral_petro, random.order = FALSE,
+                 colors = c("green", "red", "orange", "blue"),
+                 title.size = 1, max.words = 50, scale = c(2.5, 1), rot.per = 0.4)
+
+set.seed(757)
+comparison.cloud(nube_tdm_positivo_numeral_petro, random.order = FALSE,
+                 colors = c("green", "red", "orange", "blue"),
+                 title.size = 1, max.words = 50, scale = c(2.5, 1), rot.per = 0.4)
+
+set.seed(757)
+comparison.cloud(nube_tdm_polaridad_numeral_petro, random.order = FALSE,
+                 colors = c("blue", "red"),
+                 title.size = 1, max.words = 50, scale = c(2.5, 1), rot.per = 0.4)
+
+dev.off()
+
+```
+
+**Cuarto**, sentimientos en Serie de Tiempo
+```{r}
+# (Pega esto al inicio del Rmd, antes de los chunks)
+knitr::opts_chunk$set(fig.path = file.path(tempdir(), "figs-"))
+
+# ------------------------------------------------------
+# Funciones auxiliares
+# ------------------------------------------------------
+bind_pos <- function(df) {
+  pos <- data.frame(position = 1:nrow(df))
+  cbind(df, pos)
+}
+
+plot_nrc <- function(df, title) {
+  ggplot(df, aes(x = position, y = value, color = emotion)) + 
+    geom_smooth(size = 2, se = FALSE) +
+    xlab("Narrative position") +
+    ylab("Prevalence") +
+    theme_classic() +
+    ggtitle(title)
+}
+
+# ------------------------------------------------------
+# Gráfico de evolución temporal (una sola serie: #Petro)
+# ------------------------------------------------------
+sentimientos_numeral_petro <- get_nrc_sentiment(tokens_numeral_petro, lang = "spanish")
+
+df_long <- sentimientos_numeral_petro %>%
+  bind_pos() %>%
+  gather(emotion, value, -position, -negative, -positive)
+
+plot_nrc(df_long, "Sentimientos #Petro")
+
+
+```
+
+
+# 5) Analisis de causalidad
+
+## 5.1) Descripción de las fuentes de información
+
+Para el análisis econométrico y temporal de la relación entre sentimiento expresado en redes sociales y variables económicas, se utilizaron diversos paquetes especializados en manipulación de datos, modelos econométricos y análisis de series de tiempo. Esta combinación permite abordar tanto el tratamiento preliminar de los datos como la estimación y validación de modelos dinámicos.
+
+Se utilizaron tres conjuntos de datos principales:
+
+-   **Índice ColeqtyIndex**, empleado como proxy de una variable económica/financiera.
+-   **Serie de sentimientos**, obtenida a partir del análisis de sentimiento en Twitter.
+-   **Índice TRM**, representativo de la tasa de cambio nominal.
+
+Estos datos fueron importados desde archivos **Excel** previamente construidos y depurados.
+
+La separación de fuentes permite evaluar relaciones dinámicas entre variables de distinta naturaleza (económicas y emocionales).
+
+## 5.2) Construcción de series de tiempo de sentimiento
+
+Los indicadores de sentimiento representan distintas dimensiones emocionales (sorpresa, tristeza, enfado, etc.) extraídas del contenido textual de los tweets. Estas dimensiones se modelan como series de tiempo diarias, permitiendo analizar su evolución y su posible relación con variables económicas.
+
+```{r}
+##Creamos objetos en serie de tiempo
+
+# #Sentimientos
+# sorpresa <- ts(subset(ts_sentiment,dplyr::select=c(Sorpresa)),frequency = 365,start= c(2023,75))
+# tristeza <- ts(subset(ts_sentiment,dplyr::select=c(Tristeza)),frequency = 365,start= c(2023,75))
+# enfado <- ts(subset(ts_sentiment,dplyr::select=c(Enfado)),frequency = 365,start= c(2023,75))
+# disgusto <- ts(subset(ts_sentiment,dplyr::select=c(Disgusto)),frequency = 365,start= c(2023,75))
+# felicidad <- ts(subset(ts_sentiment,dplyr::select=c(Felicidad)),frequency = 365,start= c(2023,75))
+# anticipacion <- ts(subset(ts_sentiment,dplyr::select=c(Anticipación)),frequency = 365,start= c(2023,75))
+# miedo <- ts(subset(ts_sentiment,dplyr::select=c(Miedo)),frequency = 365,start= c(2023,75))
+# confianza <- ts(subset(ts_sentiment,dplyr::select=c(Confianza)),frequency = 365,start= c(2023,75))
+
+
+
+
+#Sentimientos
+sorpresa <- ts(subset(ts_sentiment,select=c(sorpresa)),frequency = 365,start= c(2023,75))
+tristeza <- ts(subset(ts_sentiment,select=c(tristeza)),frequency = 365,start= c(2023,75))
+enfado <- ts(subset(ts_sentiment,select=c(enfado)),frequency = 365,start= c(2023,75))
+disgusto <- ts(subset(ts_sentiment,select=c(disgusto)),frequency = 365,start= c(2023,75))
+felicidad <- ts(subset(ts_sentiment,select=c(felicidad)),frequency = 365,start= c(2023,75))
+anticipacion <- ts(subset(ts_sentiment,select=c(anticipacion)),frequency = 365,start= c(2023,75))
+miedo <- ts(subset(ts_sentiment,select=c(miedo)),frequency = 365,start= c(2023,75))
+confianza <- ts(subset(ts_sentiment,select=c(confianza)),frequency = 365,start= c(2023,75))
+```
+
+La frecuencia diaria (365) permite capturar variaciones de alta frecuencia en el sentimiento colectivo expresado en redes sociales.
+
+## 5.3) Construcción de series de tiempo económicas
+
+### 5.3.1) Variables económicas consideradas
+
+Se incorporaron dos variables económicas clave:
+
+-   **Índice ColeqtyIndex**, utilizado como indicador del comportamiento económico/financiero.
+-   **TRM**, empleada como proxy del mercado cambiario.
+
+Ambas variables fueron transformadas en objetos de **series de tiempo**, asegurando la misma frecuencia temporal que las series de sentimiento.
+
+```{r}
+#ColeqtyIndex
+Coleqty_ts <- as.data.frame(ColeqtyIndex) %>%
+  dplyr::pull(ultimo) %>%
+  ts(frequency = 365, start = c(2023, 75))
+
+
+TRM <- ts(subset(trmindex,select=c(trm)),frequency = 365,start= c(2023,75))
+##Tests de Granger 
+
+df=data.frame(sorpresa,tristeza,enfado,disgusto,felicidad,anticipacion,miedo,confianza,coleqty,TRM)
+df_sub <- df[, 1:10]
+plot.ts(df_sub)
+```
+
+La sincronización temporal es crucial para evitar sesgos en el análisis dinámico y para permitir pruebas de causalidad. Con el fin de realizar análisis conjuntos (VAR, causalidad de Granger, correlaciones dinámicas), se integraron todas las series en un único objeto.
+
+## 5.4) Pruebas de causalidad de Granger
+
+### 5.4.1) Fundamentación metodológica
+
+Con el objetivo de evaluar la dirección temporal de la relación entre las emociones expresadas en Twitter y el índice económico **ColeqtyIndex**, se aplican pruebas de **causalidad de Granger**.
+
+Esta prueba permite contrastar si los valores pasados de una variable $X$ contienen información estadísticamente significativa para predecir el comportamiento presente de otra variable $Y$, más allá de la información contenida en los rezagos de $Y$ (Granger, 1969).
+
+Es importante resaltar que la causalidad de Granger no implica causalidad estructural, sino **precedencia temporal con poder predictivo**, lo cual resulta especialmente relevante en contextos de **alta frecuencia**, como el análisis de datos provenientes de redes sociales.
+
+### 5.4.2) Especificación del test
+
+Para cada dimensión emocional $S_t$, se estiman dos ecuaciones:
+
+$$
+ColeqtyIndex_t \leftarrow S_t
+$$
+
+$$
+S_t \leftarrow ColeqtyIndex_t
+$$
+
+donde se utiliza un orden de rezagos $p = 2$, consistente con la literatura previa y adecuado para el análisis de **series diarias**, evitando problemas de sobreparametrización.
+
+### 5.4.3) Implementación optimizada del test de Granger
+
+#### 5.4.3.1) Definición de variables emocionales
+
+```{r}
+emociones <- c(
+  "sorpresa", "tristeza", "enfado", "disgusto",
+  "felicidad", "anticipacion", "miedo", "confianza"
+)
+
+```
+
+#### 5.4.3.2) Función para ejecutar Granger en ambos sentidos
+
+```{r}
+granger_bilateral <- function(x, y, data, lags = 2) {
+  
+  test_xy <- grangertest(
+    as.formula(paste(y, "~", x)),
+    order = lags,
+    data = data
+  )
+  
+  test_yx <- grangertest(
+    as.formula(paste(x, "~", y)),
+    order = lags,
+    data = data
+  )
+  
+  tibble(
+    Variable_X = x,
+    Variable_Y = y,
+    F_X_to_Y = test_xy$F[2],
+    p_X_to_Y = test_xy$`Pr(>F)`[2],
+    F_Y_to_X = test_yx$F[2],
+    p_Y_to_X = test_yx$`Pr(>F)`[2]
+  )
+}
+```
+
+Esta función permite automatizar el análisis y garantiza consistencia en la estimación.
+
+#### 5.4.3.3) Ejecución del test para todas las emociones
+
+```{r}
+resultados_granger <- emociones %>%
+  lapply(function(e) granger_bilateral(e, "coleqty", df, lags = 2)) %>% # antes eran 2
+  bind_rows()
+
+```
+
+Con 1 rezago funciona. El problema es que con 17 observaciones y 2 rezagos, el modelo está sobreparametrizado.
+
+#### 5.4.3.4) Presentación de resultados
+
+```{r}
+
+resultados_granger %>%
+  mutate(
+    Causalidad_X_to_Y = ifelse(p_X_to_Y < 0.05, "Sí", "No"),
+    Causalidad_Y_to_X = ifelse(p_Y_to_X < 0.05, "Sí", "No")
+  ) %>%
+  dplyr::select(
+    Variable_X,
+    F_X_to_Y, p_X_to_Y, Causalidad_X_to_Y,
+    F_Y_to_X, p_Y_to_X, Causalidad_Y_to_X
+  ) %>%
+  kbl(
+    digits = 4,
+    caption = "Pruebas de causalidad de Granger entre emociones y el índice ColeqtyIndex"
+  ) %>%
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover")
+  )
+
+
+```
+
+Los resultados de la prueba de causalidad de Granger sugieren que ciertas dimensiones emocionales presentan capacidad predictiva sobre el comportamiento del índice ColeqtyIndex, mientras que en otros casos la relación es bidireccional o inexistente. Estos hallazgos respaldan la hipótesis de que el sentimiento expresado en redes sociales puede anticipar dinámicas económicas de corto plazo.
+
+#### 5.4.3.5) Tests significativos entre emociones y el índice ColeqtyIndex
+
+**Justificación metodológica**
+
+Luego de ejecutar las pruebas de causalidad de Granger entre el índice **ColeqtyIndex** y el conjunto total de emociones, se identificaron únicamente aquellas relaciones que resultaron **estadísticamente significativas** bajo un **rezago de orden 1**.
+
+Este enfoque metodológico permite:
+
+-   Reducir el ruido estadístico.
+-   Enfocar el análisis en relaciones con evidencia empírica.
+-   Facilitar la interpretación económica de los resultados.
+
+```{r}
+emociones_coleqty <- c("confianza", "disgusto", "sorpresa", "tristeza")
+
+granger_coleqty <- map_df(emociones_coleqty, function(var) {
+  
+  test <- grangertest(
+    formula = as.formula(paste("coleqty ~", var)),
+    order = 2,
+    data = df
+  )
+  
+  tibble(
+    Variable_Explicativa = var,
+    F_stat = test$F[2],
+    p_value = test$`Pr(>F)`[2],
+    Causalidad = ifelse(test$`Pr(>F)`[2] < 0.05, "Sí", "No")
+  )
+})
+
+```
+
+Las emociones que presentan evidencia de causalidad sobre el índice **ColeqtyIndex** son: **confianza**, **disgusto**, **sorpresa** y **tristeza**.
+
+```{r}
+granger_coleqty %>%
+  kbl(
+    digits = 4,
+    caption = "Pruebas de causalidad de Granger significativas sobre el índice Coleqty (orden 2)"
+  ) %>%
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover")
+  )
+```
+
+Un valor p inferior a 0.05 indica que la emoción Granger-causa al índice ColeqtyIndex, sugiriendo que la dinámica emocional antecede cambios en el índice de percepción.
+
+#### 5.4.3.6) Pruebas de causalidad de Granger entre emociones y la TRM (orden 2)
+
+Dado que la **TRM** es una variable macrofinanciera altamente persistente, se emplea un **rezago de orden 2** con el fin de capturar efectos dinámicos de corto plazo en la relación entre las **emociones agregadas** y el **tipo de cambio**.
+
+En este contexto, se evalúan las siguientes direcciones de causalidad:
+
+-   **Emoción → TRM**
+-   **TRM → Emoción**
+
+```{r}
+emociones <- c(
+  "sorpresa", "tristeza", "enfado", "disgusto",
+  "felicidad", "anticipacion", "miedo", "confianza"
+)
+
+granger_trm <- map_df(emociones, function(var) {
+  
+  test_xy <- grangertest(
+    as.formula(paste("TRM ~", var)),
+    order = 2,
+    data = df
+  )
+  
+  test_yx <- grangertest(
+    as.formula(paste(var, "~ TRM")),
+    order = 2,
+    data = df
+  )
+  
+  tibble(
+    Emocion = var,
+    p_Emocion_a_TRM = test_xy$`Pr(>F)`[2],
+    p_TRM_a_Emocion = test_yx$`Pr(>F)`[2],
+    Causalidad_Emocion_TRM = ifelse(test_xy$`Pr(>F)`[2] < 0.05, "Sí", "No"),
+    Causalidad_TRM_Emocion = ifelse(test_yx$`Pr(>F)`[2] < 0.05, "Sí", "No")
+  )
+})
+
+
+```
+
+```{r}
+granger_trm %>%
+  dplyr::select(
+    Emocion,
+    p_Emocion_a_TRM, Causalidad_Emocion_TRM,
+    p_TRM_a_Emocion, Causalidad_TRM_Emocion
+  ) %>%
+  kbl(
+    digits = 4,
+    caption = "Pruebas de causalidad de Granger entre emociones y la TRM (orden 2)"
+  ) %>%
+  kable_styling(
+    full_width = FALSE,
+    bootstrap_options = c("striped", "hover")
+  )
+
+```
+
+## 5.5 Normalización y análisis gráfico conjunto de emociones y ColeqtyIndex
+
+### 5.5.1 Normalización de las series
+
+**Justificación metodológica**
+
+Las series analizadas —emociones extraídas de Twitter y el índice **ColeqtyIndex**— se encuentran originalmente en **escalas distintas**, lo que impide una comparación directa desde el punto de vista gráfico y dinámico.
+
+Por esta razón, se aplica una **normalización Min–Max**, consistente en el reescalamiento de las series al intervalo $[0,1]$, metodología ampliamente utilizada en análisis comparativos y estudios de correlación visual. Este procedimiento preserva la **forma temporal** de las series, permitiendo evaluar **co-movimientos** sin distorsionar su dinámica relativa.
+
+```{r}
+# Se normalizan todas las variables de sentimientos utilizando Min–Max scaling
+process_sent <- preProcess(
+  as.data.frame(ts_sentiment),
+  method = "range"
+)
+
+norm_sent <- predict(
+  process_sent,
+  as.data.frame(ts_sentiment)
+)
+
+# Se selecciona la emoción de interés (anticipación en este caso)
+Sentimientos_norm <- norm_sent %>%
+  dplyr::select(anticipacion) %>%
+  rename(Sentimientos = anticipacion)
+
+```
+
+El procedimiento es fácilmente extensible a cualquier emoción individual o combinación de emociones.
+
+```{r}
+# Normalización del índice Coleqty
+process_coleqty <- preProcess(
+  as.data.frame(ColeqtyIndex),
+  method = "range"
+)
+
+norm_coleqty <- predict(
+  process_coleqty,
+  as.data.frame(ColeqtyIndex)
+)
+
+Coleqty_norm <- norm_coleqty %>%
+  dplyr::select(ultimo) %>%
+  rename(Coleqty = ultimo)
+
+```
+
+### 5.5.2) Construcción del *data frame* conjunto
+
+**Descripción**
+
+Una vez normalizadas ambas series, se construyó un *data frame* unificado que permite la visualización conjunta de:
+
+-   La evolución de los **sentimientos agregados**.
+-   El comportamiento del **índice ColeqtyIndex**.
+
+El período analizado comprende del **16 de marzo al 1 de abril de 2023**, intervalo de especial relevancia en el debate público en torno a las reformas estructurales.
+
+```{r}
+data_norm <- data.frame(
+  Fecha = seq.Date(
+    from = as.Date("2023-03-16"),
+    to   = as.Date("2023-04-01"),
+    by   = "day"
+  ),
+  Sentimientos = Sentimientos_norm$Sentimientos[1:17],
+  Coleqty = Coleqty_norm$Coleqty[1:17]
+)
+
+```
+
+### 5.5.3) Visualización comparativa: series normalizadas
+
+**Objetivo analítico**
+
+La visualización conjunta de las series normalizadas permite analizar de manera comparativa la dinámica temporal entre las **emociones agregadas extraídas de Twitter** y el **índice ColeqtyIndex**, eliminando las diferencias de escala entre ambas variables.
+
+Este gráfico facilita la identificación de:
+
+-   **Coincidencias en tendencia**, que pueden sugerir movimientos simultáneos entre el clima emocional digital y la percepción económica.
+-   **Posibles rezagos visuales**, donde cambios en una serie preceden sistemáticamente variaciones en la otra, lo que resulta relevante para la interpretación de los tests de causalidad temporal.
+-   **Divergencias persistentes**, que pueden indicar desacoples entre la conversación emocional en redes sociales y el comportamiento del indicador económico.
+
+Adicionalmente, este análisis gráfico cumple una función exploratoria clave, al permitir evaluar la **consistencia visual** de los resultados econométricos obtenidos previamente. En particular, la presencia de patrones de co-movimiento o de rezagos observables refuerza la interpretación de las pruebas de causalidad de Granger, mientras que la ausencia de correspondencia visual puede señalar relaciones débiles o no lineales.
+
+En conjunto, la visualización comparativa actúa como un complemento descriptivo fundamental, aportando intuición económica y facilitando la comunicación de resultados en un contexto de alta volatilidad informativa como el debate digital.
+
+```{r}
+ggplot(data_norm, aes(x = Fecha)) +
+  geom_line(aes(y = Sentimientos, color = "Sentimientos"), linewidth = 1) +
+  geom_point(aes(y = Sentimientos), size = 2) +
+  
+  geom_line(aes(y = Coleqty, color = "Coleqty"), linewidth = 1) +
+  geom_point(aes(y = Coleqty), size = 2) +
+  
+  scale_color_manual(
+    values = c("Sentimientos" = "steelblue", "Coleqty" = "darkred")
+  ) +
+  
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = 0.5),
+    legend.position = "bottom"
+  ) +
+  
+  labs(
+    title = "Comparación temporal de series normalizadas",
+    subtitle = "Sentimientos agregados vs. índice Coleqty",
+    x = "Fecha",
+    y = "Valores normalizados (0–1)",
+    color = ""
+  )
+
+```
+
+### 5.5.4) Tendencias suavizadas (análisis estructural)
+
+# Validar errores de aqui a abajo
+
+**Justificación**
+
+Con el fin de identificar patrones estructurales en la relación entre las **emociones agregadas** y el **índice ColeqtyIndex**, se aplica un procedimiento de **suavizamiento no paramétrico LOESS**. Esta técnica permite extraer la tendencia subyacente de las series, atenuando el ruido de corto plazo característico de los datos provenientes de redes sociales.
+
+El uso de LOESS resulta especialmente adecuado en este contexto, ya que no impone supuestos funcionales rígidos sobre la forma de la relación temporal, lo que facilita la detección de cambios graduales, puntos de inflexión y comportamientos no lineales.
+
+La comparación de las tendencias suavizadas entre emociones y el índice económico permite:
+
+-   Evaluar la **coherencia estructural** entre ambas series a lo largo del período analizado.
+-   Identificar **desalineaciones persistentes** que no son evidentes en las series originales.
+-   Complementar el análisis dinámico de corto plazo con una perspectiva de **mediano plazo**, más robusta frente a la volatilidad informativa.
+
+En conjunto, este análisis estructural aporta una lectura más estable de la relación entre el clima emocional digital y la percepción económica, fortaleciendo la interpretación de los resultados econométricos y gráficos presentados previamente.
+
+```{r}
+ggplot(data = data50, mapping = aes(x = Fecha, group = 1)) +
+  
+  geom_smooth(
+    mapping = aes(y = Sentimientos, color = "Feelings"),
+    linetype = 7
+  ) +
+  
+  geom_smooth(
+    mapping = aes(y = ColeqtyIndex, color = "ColeqtyIndex"),
+    linetype = 7
+  ) +
+  
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = 0.5)
+  ) +
+  
+  labs(
+    title = "Normalized Correlation",
+    subtitle = "ColeqtyIndex Index versus Feelings (Sadness + Trust)",
+    caption = "Date: March 16 to April 1",
+    x = "Days",
+    y = "Normalized Values",
+    color = ""
+  )
+
+
+```
+
+Las trayectorias suavizadas muestran una evolución conjunta entre los sentimientos agregados y el índice ColeqtyIndex durante el período analizado. La coincidencia en las tendencias refuerza la hipótesis de que el clima emocional expresado en redes sociales está estrechamente vinculado con la percepción económica, en línea con los resultados obtenidos en las pruebas de causalidad de Granger.
+
+```{r}
+#Graficar
+
+#agregagamos linea de tendencia a cada especie 
+ggplot(data=FAC,mapping = aes(x = Fecha, group=1)) +
+  geom_line(mapping = aes(y = Sentimientos, color="Sentimientos")) +
+  geom_point(mapping = aes(y = Sentimientos),shape=0, size=3, colour="black", fill="yellow", show.legend = TRUE) +
+  geom_line(mapping = aes(y = TRM,color="TRM")) +
+  geom_point(mapping = aes(y = TRM),shape=1, size=3, colour="black", fill="yellow", show.legend = TRUE) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5)) 
+
+
+ggplot(data=FAC,mapping = aes(x = Fecha, group=1)) +
+  geom_smooth(mapping = aes(y = Sentimientos, color="Sentimientos"), linetype = 7) +
+  geom_point(mapping = aes(y = Sentimientos),shape= 16 ,  size=3, colour="black", fill="yellow", show.legend = TRUE) +
+  geom_smooth(mapping = aes(y = TRM,color="TRM"), linetype = 8) +
+  geom_point(mapping = aes(y = TRM),shape= 17, size=3, colour="black", fill="blue", show.legend = TRUE) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5)) +
+  labs(title="Normalized Correlation",
+       subtitle = "TRM Index versus Feelings (Disgust + Surprise)",
+       caption=paste0("Date: March 16 to April 1" ),
+       x="Days",
+       y="Normalized Values",
+       color=""
+  ) 
+```
+
+## 5.6) Se carga el archivo que contiene la frecuencia diaria de tweets relacionados con Petro y TRM
+
+```{r}
+AnalisisTRM <- read_excel("Datos/AnalisisTRM.xlsx")
+PetroT <- read_excel("Datos/PetroT.xlsx")
+
+```
+
+### 5.6.1) Construcción de la serie de tiempo de tweets
+
+```{r}
+# Se transforma la variable de frecuencia en una serie de tiempo diaria
+PetroTs = ts(
+  PetroT$frequencia,
+  freq = 364,
+  start = c(2023)
+)
+
+# Conversión de la TRM en serie de tiempo diaria
+TRMTS = ts(
+  AnalisisTRM$TRM,
+  freq = 364,
+  start = c(2023)
+)
+```
+
+#### 5.6.1.1) Se extrae la fecha desde el dataset original
+
+```{r}
+#  Variable temporal
+# Esta variable permitirá alinear las series en gráficos con ggplot
+fecha <- PetroT$fecha
+```
+
+### 5.6.2) Relación tweets – índice ColeqtyIndex
+
+```{r}
+
+# Construcción de un dataframe que integra:
+# - Frecuencia de tweets de Petro
+# - Índice ColeqtyIndex
+# - Fecha
+df1 = data.frame(PetroTs, Indice_ColeqtyIndex, fecha)
+
+# Visualización del Índice ColeqtyIndex usando la frecuencia de tweets como variable de color
+ggplot(df1,                            
+       aes(x = fecha,
+           y = Indice_ColeqtyIndex,
+           col = PetroTs)) +
+  geom_line(linewidth = 1) +
+  xlab("Time interval Analyzed") +
+  ylab("ColeqtyIndex Index") + 
+  theme_calc() + 
+  scale_color_binned(name = "Petro's tweets")
+
+```
+
+### 5.6.3) Relación tweets – TRM
+
+```{r}
+
+# Construcción del dataframe con:
+# - Frecuencia de tweets
+# - TRM
+# - Fecha
+df2 = data.frame(PetroTs, TRMTS, fecha)
+
+# Visualización de la TRM usando la frecuencia de tweets como variable de color
+ggplot(df2,                            
+       aes(x = fecha,
+           y = TRMTS,
+           col = PetroTs)) +
+  geom_line(size = 1) +
+  xlab("Time interval Analyzed") +
+  ylab("TRM") + 
+  theme_calc() + 
+  scale_color_binned(name = "Petro's tweets")
+
+
+```
+
+En esta sección se construyen **series de tiempo diarias** que capturan la frecuencia de tweets asociados al presidente **Gustavo Petro**, junto con el **índice ColeqtyIndex** y la **Tasa Representativa del Mercado (TRM)**. Posteriormente, estas variables se integran en estructuras de datos conjuntas que permiten explorar de manera visual la existencia de **co-movimientos** y **relaciones temporales** entre la dinámica de la conversación en Twitter y los indicadores financieros.
